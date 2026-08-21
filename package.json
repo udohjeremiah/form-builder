@@ -6,7 +6,12 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint --max-warnings=0 .",
+    "lint:fix": "eslint --max-warnings=0 --fix .",
+    "format": "prettier --check .",
+    "format:fix": "prettier --write .",
+    "typecheck": "tsc --noEmit",
+    "knip": "knip"
   },
   "dependencies": {
     "next": "16.3.1",
@@ -14,14 +19,42 @@
     "react-dom": "19.2.8"
   },
   "devDependencies": {
+    "@commitlint/cli": "^21",
+    "@commitlint/config-conventional": "^21",
+    "@eslint/js": "^9",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "commitizen": "^4",
+    "cz-conventional-changelog": "^3",
     "eslint": "^9",
-    "eslint-config-next": "16.3.1",
+    "eslint-config-next": "^16",
+    "eslint-config-prettier": "^10",
+    "eslint-import-resolver-typescript": "^4",
+    "eslint-plugin-depend": "^1",
+    "eslint-plugin-import-x": "^4",
+    "eslint-plugin-only-warn": "^1",
+    "eslint-plugin-perfectionist": "^5",
+    "eslint-plugin-promise": "^7",
+    "eslint-plugin-regexp": "^3",
+    "eslint-plugin-security": "^4",
+    "eslint-plugin-sonarjs": "^4",
+    "eslint-plugin-tailwindcss": "^4",
+    "eslint-plugin-unicorn": "^65",
+    "eslint-plugin-unused-imports": "^4",
+    "knip": "^6",
+    "lefthook": "^2",
+    "prettier": "^3",
+    "prettier-plugin-tailwindcss": "^0.8",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "typescript-eslint": "^8"
   },
-  "packageManager": "pnpm@11.21.0"
+  "packageManager": "pnpm@11.21.0",
+  "config": {
+    "commitizen": {
+      "path": "cz-conventional-changelog"
+    }
+  }
 }

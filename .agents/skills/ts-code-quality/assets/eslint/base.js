@@ -1,27 +1,23 @@
 // @ts-check
 
 import js from "@eslint/js";
-import nextVitals from "eslint-config-next/core-web-vitals";
-import nextTs from "eslint-config-next/typescript";
 import prettier from "eslint-config-prettier/flat";
 import { createTypeScriptImportResolver } from "eslint-import-resolver-typescript";
-import "eslint-plugin-only-warn";
 import * as depend from "eslint-plugin-depend";
 import { createNodeResolver, importX } from "eslint-plugin-import-x";
+import * as onlyWarn from "eslint-plugin-only-warn";
 import * as perfectionist from "eslint-plugin-perfectionist";
 import promise from "eslint-plugin-promise";
 import * as regexp from "eslint-plugin-regexp";
 import security from "eslint-plugin-security";
 import * as sonarjs from "eslint-plugin-sonarjs";
-import tailwindcss from "eslint-plugin-tailwindcss";
 import unicorn from "eslint-plugin-unicorn";
 import unusedImports from "eslint-plugin-unused-imports";
 import { globalIgnores } from "eslint/config";
 import * as tseslint from "typescript-eslint";
 
-// ---- Base config ----
 /** @type {import("eslint").Linter.Config[]} */
-const baseConfig = [
+const config = [
   js.configs.recommended,
   ...tseslint.configs.strictTypeChecked,
   ...tseslint.configs.stylisticTypeChecked,
@@ -38,12 +34,12 @@ const baseConfig = [
   {
     languageOptions: {
       parserOptions: {
-        projectService: {
-          allowDefaultProject: ["eslint.config.*", "postcss.config.*"],
-        },
+        // allowDefaultProject is set per-project — see SKILL.md step 5
+        projectService: true,
       },
     },
     plugins: {
+      onlyWarn,
       "unused-imports": unusedImports,
     },
     rules: {
@@ -81,65 +77,7 @@ const baseConfig = [
     },
   },
   prettier,
-];
-
-// ---- Next.js config ----
-/** @type {import("eslint").Linter.Config[]} */
-const nextjsConfig = [
-  ...nextVitals,
-  ...nextTs,
-  {
-    files: [
-      "**/page.tsx",
-      "**/layout.tsx",
-      "**/not-found.tsx",
-      "**/error.tsx",
-      "**/loading.tsx",
-      "next.config.*",
-      "eslint.config.*",
-    ],
-    rules: {
-      "import-x/no-default-export": "off",
-    },
-  },
-];
-
-// ---- Tailwind config ----
-/** @type {import("eslint").Linter.Config[]} */
-const tailwindConfig = [
-  // @ts-expect-error tailwindcss ships its own config types, not ESLint core's
-  tailwindcss.configs.recommended,
-  {
-    // @ts-expect-error plugin shape incompatible with ESLint core Plugin
-    plugins: { tailwindcss },
-    rules: {
-      "tailwindcss/no-contradicting-classname": "error",
-    },
-    settings: {
-      tailwindcss: {
-        cssConfigPath: "src/app/globals.css",
-      },
-    },
-  },
-];
-
-/** @type {import("eslint").Linter.Config[]} */
-const config = [
-  ...baseConfig,
-  ...nextjsConfig,
-  ...tailwindConfig,
-  globalIgnores([
-    // Universal
-    "dist/**",
-    ".agents/**",
-    // Next.js
-    ".next/**",
-    "out/**",
-    "build/**",
-    "next-env.d.ts",
-    // pnpm
-    "pnpm-lock.yaml",
-  ]),
+  globalIgnores(["dist/**", ".agents/**"]),
 ];
 
 export default config;

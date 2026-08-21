@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "skills": {
+    "conventional-commit-message": {
+      "source": "conventional-changelog/conventional-changelog",
+      "sourceType": "github",
+      "skillPath": "skills/conventional-commit-message/SKILL.md",
+      "computedHash": "6ae250d67edc757e2e54163dae2d32f7b44bd8827231cbab2895db8fc0331ac3"
+    },
+    "ts-code-quality": {
+      "source": "udohjeremiah/skills",
+      "sourceType": "github",
+      "skillPath": "skills/ts-code-quality/SKILL.md",
+      "computedHash": "6e227876bddeee3ffb4478bbe2e266ed90adbcb1188159a1bc6f500faf6da429"
+    }
+  }
+}

@@ -1,11 +1,12 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
+  "display": "Base",
   "compilerOptions": {
-    // ---- Base ----
     "declaration": true,
     "declarationMap": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
+    "incremental": false,
     "isolatedModules": true,
     "moduleDetection": "force",
     "noFallthroughCasesInSwitch": true,
@@ -19,28 +20,6 @@
     "resolveJsonModule": true,
     "skipLibCheck": true,
     "strict": true,
-    "strictNullChecks": true,
-    // ---- React ----
-    "jsx": "react-jsx",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "noEmit": true,
-    // ---- Next.js ----
-    "incremental": true,
-    "lib": ["ESNext", "DOM", "DOM.Iterable"],
-    "plugins": [{ "name": "next" }],
-    "target": "ES2017",
-    "allowJs": true,
-    "paths": {
-      "@/*": ["./src/*"]
-    }
-  },
-  "include": [
-    "next-env.d.ts",
-    "**/*.ts",
-    "**/*.tsx",
-    ".next/types/**/*.ts",
-    ".next/dev/types/**/*.ts"
-  ],
-  "exclude": ["node_modules"]
+    "strictNullChecks": true
+  }
 }

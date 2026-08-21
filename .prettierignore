@@ -1,0 +1,7 @@
+.agents
+dist
+coverage
+.next
+out
+build
+pnpm-lock.yaml
