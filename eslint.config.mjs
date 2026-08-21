@@ -49,6 +49,10 @@ const baseConfig = [
     rules: {
       "@typescript-eslint/consistent-type-imports": "error",
       "@typescript-eslint/no-unused-vars": "off",
+      "@typescript-eslint/restrict-template-expressions": [
+        "error",
+        { allowBoolean: true, allowNumber: true },
+      ],
       "import-x/no-default-export": "error",
       "import-x/order": "off",
       "promise/no-multiple-resolved": "error",
@@ -56,6 +60,18 @@ const baseConfig = [
       "promise/prefer-await-to-then": "error",
       "promise/prefer-catch": "error",
       "promise/spec-only": "error",
+      "unicorn/prevent-abbreviations": [
+        "error",
+        {
+          replacements: {
+            env: false,
+            param: false,
+            params: false,
+            props: false,
+            ref: false,
+          },
+        },
+      ],
       "unused-imports/no-unused-imports": "error",
       "unused-imports/no-unused-vars": [
         "warn",
@@ -123,11 +139,31 @@ const tailwindConfig = [
   },
 ];
 
+// ---- Project overrides ----
+/** @type {import("eslint").Linter.Config[]} */
+const projectOverrides = [
+  {
+    rules: {
+      // High false-positive rate on dynamic lookups (form values keyed by id).
+      "security/detect-object-injection": "off",
+      // Subjective metric; flags intentional code-generator complexity.
+      "sonarjs/cognitive-complexity": "off",
+      // Vendored shadcn components don't wrap props in Readonly<>.
+      "sonarjs/prefer-read-only-props": "off",
+      // False positives on tw-animate-css utilities and classes defined in globals.css.
+      "tailwindcss/no-custom-classname": "off",
+      // React/shadcn conventions rely on null (returning null, T | null state).
+      "unicorn/no-null": "off",
+    },
+  },
+];
+
 /** @type {import("eslint").Linter.Config[]} */
 const config = [
   ...baseConfig,
   ...nextjsConfig,
   ...tailwindConfig,
+  ...projectOverrides,
   globalIgnores([
     // Universal
     "dist/**",
