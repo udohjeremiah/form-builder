@@ -1,19 +1,21 @@
+import { ThemeProvider } from "@teispace/next-themes";
 import { Geist, Geist_Mono } from "next/font/google";
 
-import { Providers } from "@/components/providers";
+import { Toaster } from "@/components/ui/toast";
 
 import "./globals.css";
+import { cn } from "@/lib/cn";
 
 const geistSans = Geist({
   display: "swap",
   subsets: ["latin"],
-  variable: "--font-geist-sans",
+  variable: "--font-sans",
 });
 
 const geistMono = Geist_Mono({
   display: "swap",
   subsets: ["latin"],
-  variable: "--font-geist-mono",
+  variable: "--font-mono",
 });
 
 export default function RootLayout({
@@ -22,11 +24,16 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        <Providers>{children}</Providers>
+    <html
+      className={cn(geistSans.variable, geistMono.variable)}
+      lang="en"
+      suppressHydrationWarning={true}
+    >
+      <body>
+        <ThemeProvider attribute="class" disableTransitionOnChange={true}>
+          {children}
+        </ThemeProvider>
+        <Toaster />
       </body>
     </html>
   );

@@ -1,68 +1,62 @@
 "use client";
 
-import { useDraggable } from "@dnd-kit/core";
-import { motion } from "framer-motion";
+import { useDraggable } from "@dnd-kit/react";
 import {
-  AlignLeft,
-  Calendar,
-  CalendarClock,
-  CheckSquare,
-  ChevronDown,
-  Circle,
-  Clock,
-  EyeOff,
-  FileText,
-  GripVertical,
-  Hash,
-  Heading,
-  Link,
-  Lock,
-  Mail,
-  Minus,
-  Palette,
-  Phone,
-  Plus,
-  SlidersHorizontal,
-  Star,
-  ToggleLeft,
-  Type,
-  Upload,
+  AlignLeftIcon,
+  CalendarClockIcon,
+  CalendarIcon,
+  CheckSquareIcon,
+  ChevronDownIcon,
+  CircleIcon,
+  ClockIcon,
+  EyeOffIcon,
+  FileTextIcon,
+  GripVerticalIcon,
+  HashIcon,
+  HeadingIcon,
+  LinkIcon,
+  LockIcon,
+  MailIcon,
+  MinusIcon,
+  PaletteIcon,
+  PhoneIcon,
+  PlusIcon,
+  SlidersHorizontalIcon,
+  StarIcon,
+  ToggleLeftIcon,
+  TypeIcon,
+  UploadIcon,
 } from "lucide-react";
+import { motion } from "motion/react";
 
 import type { FieldType } from "@/types/form";
 
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { FIELD_TYPES } from "@/types/form";
 
 const iconMap: Record<string, React.FC<{ className?: string }>> = {
-  AlignLeft,
-  Calendar,
-  CalendarClock,
-  CheckSquare,
-  ChevronDown,
-  Circle,
-  Clock,
-  EyeOff,
-  FileText,
-  Hash,
-  Heading,
-  Link,
-  Lock,
-  Mail,
-  Minus,
-  Palette,
-  Phone,
-  SlidersHorizontal,
-  Star,
-  ToggleLeft,
-  Type,
-  Upload,
+  AlignLeftIcon,
+  CalendarClockIcon,
+  CalendarIcon,
+  CheckSquareIcon,
+  ChevronDownIcon,
+  CircleIcon,
+  ClockIcon,
+  EyeOffIcon,
+  FileTextIcon,
+  HashIcon,
+  HeadingIcon,
+  LinkIcon,
+  LockIcon,
+  MailIcon,
+  MinusIcon,
+  PaletteIcon,
+  PhoneIcon,
+  SlidersHorizontalIcon,
+  StarIcon,
+  ToggleLeftIcon,
+  TypeIcon,
+  UploadIcon,
 };
 
 const DraggableField = ({
@@ -74,44 +68,30 @@ const DraggableField = ({
   label: string;
   type: FieldType;
 }) => {
-  const { attributes, isDragging, listeners, setNodeRef, transform } =
-    useDraggable({
-      data: { fromPalette: true, type },
-      id: `palette-${type}`,
-    });
+  const { isDragging, ref } = useDraggable({
+    data: { type },
+    id: `palette-${type}`,
+  });
 
   const Icon = iconMap[icon];
-  const style = transform
-    ? { transform: `translate(${transform.x}px, ${transform.y}px)` }
-    : undefined;
 
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <div
-          ref={setNodeRef}
-          {...listeners}
-          {...attributes}
-          className={`drag-field group flex items-center gap-2.5 rounded-lg border border-transparent bg-transparent px-3 py-2 text-sm transition-all hover:border-border hover:bg-surface-2 ${
-            isDragging ? "scale-95 opacity-40" : ""
-          }`}
-          style={style}
-        >
-          <div className="flex size-7 flex-shrink-0 items-center justify-center rounded-md bg-primary/8 transition-colors group-hover:bg-primary/12">
-            {Icon && (
-              <Icon className="size-3.5 text-primary/70 transition-colors group-hover:text-primary" />
-            )}
-          </div>
-          <span className="text-[13px] font-medium text-foreground/80 transition-colors group-hover:text-foreground">
-            {label}
-          </span>
-          <GripVertical className="ml-auto size-3 text-muted-foreground/0 transition-colors group-hover:text-muted-foreground/40" />
-        </div>
-      </TooltipTrigger>
-      <TooltipContent className="font-mono text-xs" side="right">
-        Drag to add {label.toLowerCase()}
-      </TooltipContent>
-    </Tooltip>
+    <div
+      className={`drag-field group flex items-center gap-2.5 rounded-lg border border-transparent bg-transparent px-3 py-2 text-sm transition-all hover:border-border hover:bg-accent ${
+        isDragging ? "scale-95 opacity-40" : ""
+      }`}
+      ref={ref}
+    >
+      <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary/8 transition-colors group-hover:bg-primary/12">
+        {Icon && (
+          <Icon className="size-3.5 text-primary/70 transition-colors group-hover:text-primary" />
+        )}
+      </div>
+      <span className="text-[13px] font-medium text-foreground/80 transition-colors group-hover:text-foreground">
+        {label}
+      </span>
+      <GripVerticalIcon className="ml-auto size-3 text-muted-foreground/0 transition-colors group-hover:text-muted-foreground/40" />
+    </div>
   );
 };
 
@@ -130,13 +110,13 @@ const TappableField = ({
 
   return (
     <motion.button
-      className="group flex w-full items-center gap-3 rounded-xl border border-border/50 bg-surface-2/30 px-4 py-3 text-left transition-all hover:bg-surface-2 active:bg-primary/10"
+      className="group flex w-full items-center gap-3 rounded-xl border border-border/50 bg-muted/30 px-4 py-3 text-left transition-all hover:bg-accent active:bg-primary/10"
       onClick={() => {
         onTap(type);
       }}
       whileTap={{ scale: 0.95 }}
     >
-      <div className="flex size-9 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 transition-colors group-active:bg-primary/20">
+      <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 transition-colors group-active:bg-primary/20">
         {Icon && (
           <Icon className="size-4 text-primary/80 transition-colors group-active:text-primary" />
         )}
@@ -144,18 +124,18 @@ const TappableField = ({
       <span className="flex-1 text-sm font-medium text-foreground/90">
         {label}
       </span>
-      <Plus className="size-4 text-muted-foreground/30 transition-colors group-active:text-primary" />
+      <PlusIcon className="size-4 text-muted-foreground/30 transition-colors group-active:text-primary" />
     </motion.button>
   );
 };
 
-const FieldPalette = ({
+export function FieldPalette({
   fullWidth,
   onTapAdd,
 }: {
   fullWidth?: boolean;
   onTapAdd?: (type: FieldType) => void;
-}) => {
+}) {
   const isTapMode = fullWidth && onTapAdd;
 
   return (
@@ -172,7 +152,7 @@ const FieldPalette = ({
           </p>
         )}
       </div>
-      <ScrollArea className="flex-1 px-2">
+      <div className="min-h-0 flex-1 overflow-y-auto px-2">
         <div
           className={isTapMode ? "space-y-1.5 px-1 pb-4" : "space-y-0.5 pb-4"}
         >
@@ -191,7 +171,7 @@ const FieldPalette = ({
             </motion.div>
           ))}
         </div>
-      </ScrollArea>
+      </div>
       {!isTapMode && (
         <>
           <Separator />
@@ -204,6 +184,4 @@ const FieldPalette = ({
       )}
     </div>
   );
-};
-
-export { FieldPalette };
+}

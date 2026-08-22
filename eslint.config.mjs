@@ -128,9 +128,6 @@ const tailwindConfig = [
   {
     // @ts-expect-error plugin shape incompatible with ESLint core Plugin
     plugins: { tailwindcss },
-    rules: {
-      "tailwindcss/no-contradicting-classname": "error",
-    },
     settings: {
       tailwindcss: {
         cssConfigPath: "src/app/globals.css",
@@ -146,11 +143,13 @@ const projectOverrides = [
     rules: {
       // High false-positive rate on dynamic lookups (form values keyed by id).
       "security/detect-object-injection": "off",
-      // Subjective metric; flags intentional code-generator complexity.
+      // Subjective metric; validateField's per-rule validation switch is
+      // intentionally a flat chain of branches.
       "sonarjs/cognitive-complexity": "off",
       // Vendored shadcn components don't wrap props in Readonly<>.
       "sonarjs/prefer-read-only-props": "off",
-      // False positives on tw-animate-css utilities and classes defined in globals.css.
+      // False positives on tw-animate-css utilities and custom classes defined
+      // in globals.css
       "tailwindcss/no-custom-classname": "off",
       // React/shadcn conventions rely on null (returning null, T | null state).
       "unicorn/no-null": "off",

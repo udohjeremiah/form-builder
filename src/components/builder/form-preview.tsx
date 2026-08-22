@@ -1,16 +1,16 @@
 "use client";
 
 import { format } from "date-fns";
-import { AnimatePresence, motion } from "framer-motion";
 import {
-  AlertCircle,
+  AlertCircleIcon,
   CalendarIcon,
-  Check,
-  ChevronLeft,
-  ChevronRight,
-  Star,
-  Upload,
+  CheckIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  StarIcon,
+  UploadIcon,
 } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useState } from "react";
 
 import type { FormField, FormStep } from "@/types/form";
@@ -68,7 +68,7 @@ const FieldInput = ({
             checked={value === "true"}
             id={field.id}
             onCheckedChange={(checked) => {
-              onChange(String(!!checked));
+              onChange(String(checked));
               onBlur();
             }}
           />
@@ -116,22 +116,24 @@ const FieldInput = ({
       const dateValue = value ? new Date(value) : undefined;
       return (
         <Popover>
-          <PopoverTrigger asChild>
-            <Button
-              className={cn(
-                "w-full justify-start text-left font-normal",
-                !dateValue && "text-muted-foreground",
-                hasError && "border-destructive/60",
-              )}
-              variant="outline"
-            >
-              <CalendarIcon className="mr-2 size-4" />
-              {dateValue ? (
-                format(dateValue, "PPP")
-              ) : (
-                <span>{field.placeholder ?? "Pick a date"}</span>
-              )}
-            </Button>
+          <PopoverTrigger
+            render={
+              <Button
+                className={cn(
+                  "w-full justify-start text-left font-normal",
+                  !dateValue && "text-muted-foreground",
+                  hasError && "border-destructive/60",
+                )}
+                variant="outline"
+              />
+            }
+          >
+            <CalendarIcon className="mr-2 size-4" />
+            {dateValue ? (
+              format(dateValue, "PPP")
+            ) : (
+              <span>{field.placeholder ?? "Pick a date"}</span>
+            )}
           </PopoverTrigger>
           <PopoverContent align="start" className="w-auto p-0">
             <Calendar
@@ -167,7 +169,7 @@ const FieldInput = ({
         <div
           className={`cursor-pointer rounded-lg border-2 border-dashed p-8 text-center transition-colors hover:border-primary/30 ${hasError ? "border-destructive/40 bg-destructive/5" : "border-border"}`}
         >
-          <Upload className="mx-auto mb-2 size-5 text-muted-foreground" />
+          <UploadIcon className="mx-auto mb-2 size-5 text-muted-foreground" />
           <p className="font-mono text-xs text-muted-foreground">
             Drop files or click to upload
           </p>
@@ -185,7 +187,7 @@ const FieldInput = ({
 
     case "hidden": {
       return (
-        <div className="flex items-center gap-2 rounded-md border border-dashed border-border bg-surface-2/50 px-3 py-2">
+        <div className="flex items-center gap-2 rounded-md border border-dashed border-border bg-muted/50 px-3 py-2">
           <span className="font-mono text-[10px] text-muted-foreground/50">
             Hidden: {field.label}
           </span>
@@ -219,7 +221,7 @@ const FieldInput = ({
     case "radio": {
       return (
         <RadioGroup
-          onValueChange={(v) => {
+          onValueChange={(v: string) => {
             onChange(v);
             onBlur();
           }}
@@ -256,7 +258,7 @@ const FieldInput = ({
               }}
               type="button"
             >
-              <Star
+              <StarIcon
                 className={cn(
                   "size-6 transition-colors",
                   star <= ratingValue
@@ -279,6 +281,7 @@ const FieldInput = ({
       return (
         <Select
           onValueChange={(v) => {
+            if (!v) return;
             onChange(v);
             onBlur();
           }}
@@ -314,8 +317,12 @@ const FieldInput = ({
             className="w-full"
             max={100}
             min={0}
-            onValueChange={(v) => {
-              onChange(String(v[0]));
+            onValueChange={(v: number | readonly number[]) => {
+              if (Array.isArray(v)) {
+                onChange(String(v[0]));
+              } else {
+                onChange(String(v));
+              }
               onBlur();
             }}
             step={1}
@@ -422,8 +429,7 @@ const ProgressBar = ({
   <div className="mb-8">
     <div className="mb-3 flex items-center justify-between">
       {steps.map((step, index) => {
-        let circleClass =
-          "border border-border bg-surface-2 text-muted-foreground";
+        let circleClass = "border border-border bg-muted text-muted-foreground";
         if (index < currentStep) {
           circleClass = "bg-primary text-primary-foreground";
         } else if (index === currentStep) {
@@ -439,7 +445,7 @@ const ProgressBar = ({
                 className={`flex size-7 items-center justify-center rounded-full font-mono text-[11px] font-bold transition-all ${circleClass}`}
               >
                 {index < currentStep ? (
-                  <Check className="size-3.5" />
+                  <CheckIcon className="size-3.5" />
                 ) : (
                   index + 1
                 )}
@@ -470,7 +476,7 @@ const ProgressBar = ({
   </div>
 );
 
-const FormPreview = ({
+export function FormPreview({
   fields,
   multiStepEnabled,
   steps,
@@ -478,7 +484,7 @@ const FormPreview = ({
   fields: FormField[];
   multiStepEnabled: boolean;
   steps: FormStep[];
-}) => {
+}) {
   const [currentStep, setCurrentStep] = useState(0);
   const [values, setValues] = useState<Record<string, string>>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
@@ -546,7 +552,7 @@ const FormPreview = ({
 
   return (
     <div className="flex h-full flex-1 flex-col">
-      <div className="flex items-center justify-between border-b border-border bg-surface-1 px-6 py-3">
+      <div className="flex items-center justify-between border-b border-border bg-muted/50 px-6 py-3">
         <h3 className="font-mono text-xs tracking-wider text-muted-foreground uppercase">
           Preview
         </h3>
@@ -638,7 +644,7 @@ const FormPreview = ({
                                 exit={{ height: 0, opacity: 0 }}
                                 initial={{ height: 0, opacity: 0 }}
                               >
-                                <AlertCircle className="size-3 flex-shrink-0 text-destructive" />
+                                <AlertCircleIcon className="size-3 flex-shrink-0 text-destructive" />
                                 <span className="text-xs text-destructive">
                                   {fieldError}
                                 </span>
@@ -662,17 +668,17 @@ const FormPreview = ({
                   }}
                   variant="outline"
                 >
-                  <ChevronLeft className="size-3.5" />
+                  <ChevronLeftIcon className="size-3.5" />
                   Back
                 </Button>
               )}
               <Button
-                className="glow hover:glow-strong flex-1 gap-1.5 transition-shadow"
+                className="flex-1 gap-1.5 shadow-glow transition-shadow hover:shadow-glow-strong"
                 onClick={handleNext}
               >
                 {multiStepEnabled && !isLastStep ? (
                   <>
-                    Next <ChevronRight className="size-3.5" />
+                    Next <ChevronRightIcon className="size-3.5" />
                   </>
                 ) : (
                   "Submit"
@@ -684,6 +690,4 @@ const FormPreview = ({
       </div>
     </div>
   );
-};
-
-export { FormPreview };
+}

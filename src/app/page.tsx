@@ -1,33 +1,23 @@
 "use client";
 
-import type { DragEndEvent, DragStartEvent } from "@dnd-kit/core";
+import type { DragEndEvent } from "@dnd-kit/react";
 
+import { DragDropProvider, DragOverlay } from "@dnd-kit/react";
+import { isSortable } from "@dnd-kit/react/sortable";
 import {
-  closestCenter,
-  DndContext,
-  DragOverlay,
-  PointerSensor,
-  useSensor,
-  useSensors,
-} from "@dnd-kit/core";
-import { arrayMove } from "@dnd-kit/sortable";
-import { AnimatePresence, motion } from "framer-motion";
-import {
-  Code2,
-  Columns3,
-  Download,
-  Eye,
-  Layers,
-  LayoutTemplate,
-  ListOrdered,
-  PanelLeft,
-  Redo2,
-  Settings2,
-  Undo2,
+  Code2Icon,
+  Columns3Icon,
+  EyeIcon,
+  LayersIcon,
+  ListOrderedIcon,
+  PanelLeftIcon,
+  Redo2Icon,
+  Settings2Icon,
+  Undo2Icon,
 } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import type { FormTemplate } from "@/data/form-templates";
 import type { FieldType, FormField, FormStep } from "@/types/form";
 
 import { FieldPalette } from "@/components/builder/field-palette";
@@ -35,12 +25,10 @@ import { FieldProperties } from "@/components/builder/field-properties";
 import { FormCanvas } from "@/components/builder/form-canvas";
 import { FormPreview } from "@/components/builder/form-preview";
 import { SchemaOutput } from "@/components/builder/schema-output";
-import { TemplateGallery } from "@/components/builder/template-gallery";
 import { Separator } from "@/components/ui/separator";
+import { toast } from "@/components/ui/toast";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { useToast } from "@/hooks/use-toast";
 import { useUndoRedo } from "@/hooks/use-undo-redo";
-import { downloadFile, generateReactComponent } from "@/lib/export-react";
 
 type MobilePanel = "canvas" | "output" | "palette" | "properties";
 type RightPanel = "preview" | "schema";
@@ -132,19 +120,8 @@ const saveDraft = (state: DraftState) => {
 
 const defaultStep = createStep();
 
-const BuilderPage = () => {
-  const { toast } = useToast();
+export default function BuilderPage() {
   const isMobile = useIsMobile();
-
-  const [initialDraft] = useState(loadDraft);
-  const hasDraft = !!initialDraft;
-  const initialState: FormState = initialDraft
-    ? {
-        fields: initialDraft.fields,
-        multiStepEnabled: initialDraft.multiStepEnabled,
-        steps: initialDraft.steps,
-      }
-    : { fields: [], multiStepEnabled: false, steps: [defaultStep] };
 
   const {
     canRedo,
@@ -154,19 +131,22 @@ const BuilderPage = () => {
     set: setFormState,
     state: formState,
     undo,
-  } = useUndoRedo<FormState>(initialState);
+  } = useUndoRedo<FormState>({
+    fields: [],
+    multiStepEnabled: false,
+    steps: [defaultStep],
+  });
   const { fields, multiStepEnabled, steps } = formState;
 
   const [activeStepIndex, setActiveStepIndex] = useState(0);
   const [selectedId, setSelectedId] = useState<null | string>(null);
   const [rightPanel, setRightPanel] = useState<RightPanel>("preview");
-  const [activeId, setActiveId] = useState<null | string>(null);
   const [editingStepId, setEditingStepId] = useState<null | string>(null);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saved">("idle");
-  const [showTemplates, setShowTemplates] = useState(!hasDraft);
   const [mobilePanel, setMobilePanel] = useState<MobilePanel>("canvas");
 
   useEffect(() => {
+    const initialDraft = loadDraft();
     if (!initialDraft) return;
     let maxField = fieldCounter;
     let maxStep = stepCounter;
@@ -180,6 +160,11 @@ const BuilderPage = () => {
     }
     fieldCounter = maxField;
     stepCounter = maxStep;
+    resetHistory({
+      fields: initialDraft.fields,
+      multiStepEnabled: initialDraft.multiStepEnabled,
+      steps: initialDraft.steps,
+    });
     const ago = Date.now() - initialDraft.savedAt;
     let agoText = "just now";
     if (ago >= 3_600_000) {
@@ -187,7 +172,7 @@ const BuilderPage = () => {
     } else if (ago >= 60_000) {
       agoText = `${Math.floor(ago / 60_000)}m ago`;
     }
-    toast({
+    toast.add({
       description: `${initialDraft.fields.length} field${initialDraft.fields.length === 1 ? "" : "s"} recovered (${agoText}).`,
       title: "Draft restored",
     });
@@ -232,10 +217,6 @@ const BuilderPage = () => {
     };
   }, [undo, redo]);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-  );
-
   const currentStepFields = multiStepEnabled
     ? fields.filter((f) => f.step === activeStepIndex)
     : fields;
@@ -271,17 +252,13 @@ const BuilderPage = () => {
     [isMobile, mobilePanel],
   );
 
-  const handleDragStart = useCallback((event: DragStartEvent) => {
-    setActiveId(String(event.active.id));
-  }, []);
-
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
-      setActiveId(null);
-      const { active, over } = event;
-      if (!over) return;
-      if (String(active.id).startsWith("palette-")) {
-        const type = active.data.current?.["type"] as FieldType | undefined;
+      if (event.canceled) return;
+      const { source } = event.operation;
+      if (!source) return;
+      if (String(source.id).startsWith("palette-")) {
+        const type = source.data["type"] as FieldType | undefined;
         if (type) {
           const f = createField(type, activeStepIndex);
           updateFields((p) => [...p, f]);
@@ -289,17 +266,26 @@ const BuilderPage = () => {
         }
         return;
       }
-      if (active.id !== over.id) {
-        updateFields((previous) => {
-          const ni = previous.findIndex((f) => f.id === over.id),
-            oi = previous.findIndex((f) => f.id === active.id);
-          return oi === -1 || ni === -1
-            ? previous
-            : arrayMove(previous, oi, ni);
-        });
-      }
+      if (!isSortable(source)) return;
+      const { index, initialIndex } = source;
+      if (initialIndex === index) return;
+      // Sortable indexes refer to the filtered current-step list; map both
+      // positions back to global field ids before reordering.
+      const fromId = currentStepFields[initialIndex]?.id;
+      const toId = currentStepFields[index]?.id;
+      if (!fromId || !toId || fromId === toId) return;
+      updateFields((previous) => {
+        const oi = previous.findIndex((f) => f.id === fromId);
+        const ni = previous.findIndex((f) => f.id === toId);
+        if (oi === -1 || ni === -1) return previous;
+        const next = [...previous];
+        const [moved] = next.splice(oi, 1);
+        if (!moved) return previous;
+        next.splice(ni, 0, moved);
+        return next;
+      });
     },
-    [activeStepIndex, updateFields, selectField],
+    [activeStepIndex, currentStepFields, updateFields, selectField],
   );
 
   const handleRemove = useCallback(
@@ -397,35 +383,8 @@ const BuilderPage = () => {
     });
     setActiveStepIndex(0);
     selectField(null);
-    toast({ description: "Started fresh.", title: "Draft cleared" });
-  }, [toast, resetHistory, selectField]);
-
-  const handleLoadTemplate = useCallback(
-    (template: FormTemplate) => {
-      const ts = Date.now();
-      const nf = template.fields.map((f, index) => ({
-        ...f,
-        id: `field_${++fieldCounter}_${ts + index}`,
-      }));
-      const ns = template.steps.map((s, index) => ({
-        ...s,
-        id: `step_${++stepCounter}_${ts + index}`,
-      }));
-      resetHistory({
-        fields: nf,
-        multiStepEnabled: template.multiStepEnabled,
-        steps: ns,
-      });
-      setActiveStepIndex(0);
-      selectField(null);
-      setShowTemplates(false);
-      toast({
-        description: `${nf.length} fields ready.`,
-        title: `"${template.name}" loaded`,
-      });
-    },
-    [resetHistory, toast, selectField],
-  );
+    toast.add({ description: "Started fresh.", title: "Draft cleared" });
+  }, [resetHistory, selectField]);
 
   const handleTapAdd = useCallback(
     (type: FieldType) => {
@@ -433,12 +392,12 @@ const BuilderPage = () => {
       updateFields((p) => [...p, f]);
       selectField(f.id);
       setMobilePanel("canvas");
-      toast({
+      toast.add({
         description: "Tap to edit properties.",
         title: `${f.label} added`,
       });
     },
-    [activeStepIndex, updateFields, toast, selectField],
+    [activeStepIndex, updateFields, selectField],
   );
 
   const mobileTabs: {
@@ -446,10 +405,10 @@ const BuilderPage = () => {
     key: MobilePanel;
     label: string;
   }[] = [
-    { icon: PanelLeft, key: "palette", label: "Fields" },
-    { icon: Columns3, key: "canvas", label: "Canvas" },
-    { icon: Settings2, key: "properties", label: "Props" },
-    { icon: Eye, key: "output", label: "Preview" },
+    { icon: PanelLeftIcon, key: "palette", label: "Fields" },
+    { icon: Columns3Icon, key: "canvas", label: "Canvas" },
+    { icon: Settings2Icon, key: "properties", label: "Props" },
+    { icon: EyeIcon, key: "output", label: "Preview" },
   ];
 
   return (
@@ -458,7 +417,7 @@ const BuilderPage = () => {
       <header className="flex h-11 shrink-0 items-center justify-between border-b border-border bg-background px-2 md:px-3">
         <div className="flex items-center gap-1.5 md:gap-2">
           <div className="flex items-center gap-1.5">
-            <Layers className="size-3.5 text-primary" />
+            <LayersIcon className="size-3.5 text-primary" />
             <span className="font-mono text-[13px] font-semibold text-foreground">
               form-builder
             </span>
@@ -487,18 +446,18 @@ const BuilderPage = () => {
           {/* Undo/Redo */}
           <div className="ml-1 flex items-center gap-0.5">
             <button
-              className={`rounded-md p-1 transition-colors ${canUndo ? "text-muted-foreground/60 hover:bg-surface-2 hover:text-foreground" : "cursor-not-allowed text-muted-foreground/15"}`}
+              className={`rounded-md p-1 transition-colors ${canUndo ? "text-muted-foreground/60 hover:bg-accent hover:text-foreground" : "cursor-not-allowed text-muted-foreground/15"}`}
               disabled={!canUndo}
               onClick={undo}
             >
-              <Undo2 className="size-3.5" />
+              <Undo2Icon className="size-3.5" />
             </button>
             <button
-              className={`rounded-md p-1 transition-colors ${canRedo ? "text-muted-foreground/60 hover:bg-surface-2 hover:text-foreground" : "cursor-not-allowed text-muted-foreground/15"}`}
+              className={`rounded-md p-1 transition-colors ${canRedo ? "text-muted-foreground/60 hover:bg-accent hover:text-foreground" : "cursor-not-allowed text-muted-foreground/15"}`}
               disabled={!canRedo}
               onClick={redo}
             >
-              <Redo2 className="size-3.5" />
+              <Redo2Icon className="size-3.5" />
             </button>
           </div>
         </div>
@@ -511,53 +470,17 @@ const BuilderPage = () => {
             Clear
           </button>
 
-          <button
-            className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-medium text-primary/70 transition-all hover:bg-primary/10 hover:text-primary md:px-2.5"
-            onClick={() => {
-              if (fields.length === 0) {
-                toast({
-                  description: "Add fields first.",
-                  title: "Nothing to export",
-                });
-                return;
-              }
-              const code = generateReactComponent(
-                fields,
-                steps,
-                multiStepEnabled,
-              );
-              downloadFile(code, "GeneratedForm.tsx");
-              toast({
-                description: "GeneratedForm.tsx downloaded.",
-                title: "Exported!",
-              });
-            }}
-          >
-            <Download className="size-3.5" />
-            <span className="hidden sm:inline">Export</span>
-          </button>
-
-          <button
-            className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-medium text-muted-foreground/60 transition-all hover:bg-surface-2 hover:text-foreground md:px-2.5"
-            onClick={() => {
-              setShowTemplates(true);
-            }}
-          >
-            <LayoutTemplate className="size-3.5" />
-            <span className="hidden sm:inline">Templates</span>
-          </button>
-
           <Separator className="hidden h-4 sm:block" orientation="vertical" />
 
           <button
             className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-medium transition-all md:px-2.5 ${
               multiStepEnabled
                 ? "bg-primary/10 text-primary"
-                : "text-muted-foreground/60 hover:bg-surface-2 hover:text-foreground"
+                : "text-muted-foreground/60 hover:bg-accent hover:text-foreground"
             }`}
             onClick={toggleMultiStep}
           >
-            <ListOrdered className="size-3.5" />
+            <ListOrderedIcon className="size-3.5" />
             <span className="hidden sm:inline">Steps</span>
           </button>
 
@@ -565,15 +488,23 @@ const BuilderPage = () => {
           {!isMobile && (
             <>
               <Separator className="h-4" orientation="vertical" />
-              <div className="flex items-center rounded-lg bg-surface-2/50 p-0.5">
+              <div className="flex items-center rounded-lg bg-muted/50 p-0.5">
                 {[
-                  { icon: Eye, key: "preview" as RightPanel, label: "Preview" },
-                  { icon: Code2, key: "schema" as RightPanel, label: "Schema" },
+                  {
+                    icon: EyeIcon,
+                    key: "preview" as RightPanel,
+                    label: "Preview",
+                  },
+                  {
+                    icon: Code2Icon,
+                    key: "schema" as RightPanel,
+                    label: "Schema",
+                  },
                 ].map(({ icon: Icon, key, label }) => (
                   <button
                     className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-medium transition-all ${
                       rightPanel === key
-                        ? "bg-surface-3 text-foreground shadow-sm"
+                        ? "bg-background text-foreground shadow-sm"
                         : "text-muted-foreground/50 hover:text-foreground"
                     }`}
                     key={key}
@@ -611,12 +542,7 @@ const BuilderPage = () => {
                   </div>
                 )}
                 {mobilePanel === "canvas" && (
-                  <DndContext
-                    collisionDetection={closestCenter}
-                    onDragEnd={handleDragEnd}
-                    onDragStart={handleDragStart}
-                    sensors={sensors}
-                  >
+                  <DragDropProvider onDragEnd={handleDragEnd}>
                     <FormCanvas
                       activeStepIndex={activeStepIndex}
                       editingStepId={editingStepId}
@@ -634,13 +560,15 @@ const BuilderPage = () => {
                       steps={steps}
                     />
                     <DragOverlay>
-                      {activeId && activeId.startsWith("palette-") && (
-                        <div className="glow rounded-lg border border-primary/30 bg-surface-2 px-3 py-2 text-sm font-medium text-foreground shadow-lg">
-                          {activeId.replace("palette-", "")}
-                        </div>
-                      )}
+                      {(source) =>
+                        String(source.id).startsWith("palette-") ? (
+                          <div className="rounded-lg border border-primary/30 bg-muted px-3 py-2 text-sm font-medium text-foreground shadow-glow">
+                            {String(source.id).replace("palette-", "")}
+                          </div>
+                        ) : null
+                      }
                     </DragOverlay>
-                  </DndContext>
+                  </DragDropProvider>
                 )}
                 {mobilePanel === "properties" && (
                   <div className="h-full overflow-y-auto">
@@ -658,12 +586,12 @@ const BuilderPage = () => {
                     <div className="flex items-center gap-1 border-b border-border bg-background p-2">
                       {[
                         {
-                          icon: Eye,
+                          icon: EyeIcon,
                           key: "preview" as RightPanel,
                           label: "Preview",
                         },
                         {
-                          icon: Code2,
+                          icon: Code2Icon,
                           key: "schema" as RightPanel,
                           label: "Schema",
                         },
@@ -671,7 +599,7 @@ const BuilderPage = () => {
                         <button
                           className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-2.5 py-1.5 text-[11px] font-medium transition-all ${
                             rightPanel === key
-                              ? "bg-surface-3 text-foreground shadow-sm"
+                              ? "bg-background text-foreground shadow-sm"
                               : "text-muted-foreground/50 hover:text-foreground"
                           }`}
                           key={key}
@@ -706,7 +634,7 @@ const BuilderPage = () => {
           </div>
 
           {/* Bottom tab bar */}
-          <nav className="safe-area-bottom flex shrink-0 items-center border-t border-border bg-background">
+          <nav className="flex shrink-0 items-center border-t border-border bg-background">
             {mobileTabs.map(({ icon: Icon, key, label }) => (
               <button
                 className={`flex flex-1 flex-col items-center gap-0.5 py-2 transition-colors ${
@@ -734,12 +662,7 @@ const BuilderPage = () => {
       ) : (
         /* ─── Desktop layout: side-by-side panels ─── */
         <div className="flex flex-1 overflow-hidden">
-          <DndContext
-            collisionDetection={closestCenter}
-            onDragEnd={handleDragEnd}
-            onDragStart={handleDragStart}
-            sensors={sensors}
-          >
+          <DragDropProvider onDragEnd={handleDragEnd}>
             <FieldPalette />
             <FormCanvas
               activeStepIndex={activeStepIndex}
@@ -758,13 +681,15 @@ const BuilderPage = () => {
               steps={steps}
             />
             <DragOverlay>
-              {activeId && activeId.startsWith("palette-") && (
-                <div className="glow rounded-lg border border-primary/30 bg-surface-2 px-3 py-2 text-sm font-medium text-foreground shadow-lg">
-                  {activeId.replace("palette-", "")}
-                </div>
-              )}
+              {(source) =>
+                String(source.id).startsWith("palette-") ? (
+                  <div className="rounded-lg border border-primary/30 bg-muted px-3 py-2 text-sm font-medium text-foreground shadow-glow">
+                    {String(source.id).replace("palette-", "")}
+                  </div>
+                ) : null
+              }
             </DragOverlay>
-          </DndContext>
+          </DragDropProvider>
 
           <FieldProperties
             allFields={fields}
@@ -796,19 +721,6 @@ const BuilderPage = () => {
           </div>
         </div>
       )}
-
-      <AnimatePresence>
-        {showTemplates && (
-          <TemplateGallery
-            onClose={() => {
-              setShowTemplates(false);
-            }}
-            onSelect={handleLoadTemplate}
-          />
-        )}
-      </AnimatePresence>
     </div>
   );
-};
-
-export default BuilderPage;
+}

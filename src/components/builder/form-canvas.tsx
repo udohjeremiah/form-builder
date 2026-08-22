@@ -1,14 +1,17 @@
 "use client";
 
-import { useDroppable } from "@dnd-kit/core";
+import { useDroppable } from "@dnd-kit/react";
+import { useSortable } from "@dnd-kit/react/sortable";
 import {
-  SortableContext,
-  useSortable,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
-import { AnimatePresence, motion } from "framer-motion";
-import { Copy, Eye, GripVertical, Pencil, Plus, Trash2, X } from "lucide-react";
+  CopyIcon,
+  EyeIcon,
+  GripVerticalIcon,
+  PencilIcon,
+  PlusIcon,
+  Trash2Icon,
+  XIcon,
+} from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
 
 import type { FormField, FormStep } from "@/types/form";
@@ -17,40 +20,28 @@ import { Button } from "@/components/ui/button";
 
 const SortableField = ({
   field,
+  index,
   isSelected,
   onDuplicate,
   onRemove,
   onSelect,
 }: {
   field: FormField;
+  index: number;
   isSelected: boolean;
   onDuplicate: (id: string) => void;
   onRemove: (id: string) => void;
   onSelect: (id: string) => void;
 }) => {
-  const {
-    attributes,
-    isDragging,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-  } = useSortable({
-    id: field.id,
-  });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
+  const { isDragging, ref } = useSortable({ id: field.id, index });
 
   return (
     <motion.div
       animate={{ opacity: 1, y: 0 }}
       className={`group flex cursor-pointer items-center gap-3 rounded-lg border p-3 transition-all ${
         isSelected
-          ? "border-primary/40 bg-primary/[0.06] shadow-[0_0_0_1px_hsl(217_91%_60%/0.1)]"
-          : "border-border/60 bg-surface-2/50 hover:border-border hover:bg-surface-2"
+          ? "border-primary/40 bg-primary/6 shadow-[0_0_0_1px_hsl(217_91%_60%/0.1)]"
+          : "border-border/60 bg-muted/50 hover:border-border hover:bg-accent"
       } ${isDragging ? "z-50 opacity-40" : ""}`}
       exit={{ height: 0, opacity: 0, y: -8 }}
       initial={{ opacity: 0, y: 8 }}
@@ -58,15 +49,10 @@ const SortableField = ({
       onClick={() => {
         onSelect(field.id);
       }}
-      ref={setNodeRef}
-      style={style}
+      ref={ref}
     >
-      <div
-        {...attributes}
-        {...listeners}
-        className="-ml-1 cursor-grab p-0.5 active:cursor-grabbing"
-      >
-        <GripVertical className="size-3.5 text-muted-foreground/30 transition-colors group-hover:text-muted-foreground/60" />
+      <div className="-ml-1 cursor-grab p-0.5 active:cursor-grabbing">
+        <GripVerticalIcon className="size-3.5 text-muted-foreground/30 transition-colors group-hover:text-muted-foreground/60" />
       </div>
 
       <div className="min-w-0 flex-1">
@@ -74,37 +60,37 @@ const SortableField = ({
           <span className="truncate text-[13px] font-medium text-foreground">
             {field.label}
           </span>
-          <span className="rounded-md bg-surface-3/80 px-1.5 py-0.5 font-mono text-[9px] tracking-wide text-muted-foreground/70 uppercase">
+          <span className="rounded-md bg-muted/80 px-1.5 py-0.5 font-mono text-[9px] tracking-wide text-muted-foreground/70 uppercase">
             {field.type}
           </span>
           {field.required && (
-            <span className="size-1 flex-shrink-0 rounded-full bg-primary" />
+            <span className="size-1 shrink-0 rounded-full bg-primary" />
           )}
           {field.condition?.fieldId && (
-            <Eye className="size-3 flex-shrink-0 text-accent/60" />
+            <EyeIcon className="size-3 shrink-0 text-accent/60" />
           )}
         </div>
       </div>
 
       <div className="flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
         <button
-          className="rounded-md p-1.5 text-muted-foreground/50 transition-colors hover:bg-surface-3 hover:text-foreground"
+          className="rounded-md p-1.5 text-muted-foreground/50 transition-colors hover:bg-accent hover:text-foreground"
           onClick={(event) => {
             event.stopPropagation();
             onDuplicate(field.id);
           }}
           title="Duplicate"
         >
-          <Copy className="size-3" />
+          <CopyIcon className="size-3" />
         </button>
         <button
-          className="rounded-md p-1.5 text-muted-foreground/50 transition-colors hover:bg-surface-3 hover:text-foreground"
+          className="rounded-md p-1.5 text-muted-foreground/50 transition-colors hover:bg-accent hover:text-foreground"
           onClick={(event) => {
             event.stopPropagation();
             onSelect(field.id);
           }}
         >
-          <Pencil className="size-3" />
+          <PencilIcon className="size-3" />
         </button>
         <button
           className="rounded-md p-1.5 text-muted-foreground/50 transition-colors hover:bg-destructive/10 hover:text-destructive"
@@ -113,14 +99,14 @@ const SortableField = ({
             onRemove(field.id);
           }}
         >
-          <Trash2 className="size-3" />
+          <Trash2Icon className="size-3" />
         </button>
       </div>
     </motion.div>
   );
 };
 
-const FormCanvas = ({
+export function FormCanvas({
   activeStepIndex,
   editingStepId,
   fields,
@@ -150,8 +136,8 @@ const FormCanvas = ({
   onStepChange: (index: number) => void;
   selectedId: null | string;
   steps: FormStep[];
-}) => {
-  const { isOver, setNodeRef } = useDroppable({ id: "canvas" });
+}) {
+  const { isDropTarget, ref } = useDroppable({ id: "canvas" });
   const [renameValue, setRenameValue] = useState("");
 
   const startRename = (step: FormStep) => {
@@ -185,7 +171,7 @@ const FormCanvas = ({
               {editingStepId === step.id ? (
                 <input
                   autoFocus
-                  className="w-24 rounded-md border border-primary/40 bg-surface-2 px-2 py-1 font-mono text-xs text-foreground focus:outline-none"
+                  className="w-24 rounded-md border border-primary/40 bg-muted px-2 py-1 font-mono text-xs text-foreground focus:outline-none"
                   onBlur={() => {
                     commitRename(index);
                   }}
@@ -203,7 +189,7 @@ const FormCanvas = ({
                   className={`group flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-all ${
                     activeStepIndex === index
                       ? "bg-primary/10 text-primary"
-                      : "text-muted-foreground hover:bg-surface-2 hover:text-foreground"
+                      : "text-muted-foreground hover:bg-accent hover:text-foreground"
                   }`}
                   onClick={() => {
                     onStepChange(index);
@@ -230,7 +216,7 @@ const FormCanvas = ({
                         onRemoveStep(index);
                       }}
                     >
-                      <X className="size-3" />
+                      <XIcon className="size-3" />
                     </span>
                   )}
                 </button>
@@ -243,20 +229,20 @@ const FormCanvas = ({
             size="icon"
             variant="ghost"
           >
-            <Plus className="size-3.5" />
+            <PlusIcon className="size-3.5" />
           </Button>
         </div>
       )}
 
       {/* Drop zone */}
       <div
-        className={`flex-1 overflow-y-auto p-5 transition-colors ${isOver ? "drop-zone-active" : ""}`}
-        ref={setNodeRef}
+        className={`flex-1 overflow-y-auto p-5 transition-colors ${isDropTarget ? "drop-zone-active" : ""}`}
+        ref={ref}
       >
         {fields.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center text-center">
             <div className="mb-3 flex size-14 items-center justify-center rounded-2xl border border-dashed border-border/80">
-              <Plus className="size-5 text-muted-foreground/30" />
+              <PlusIcon className="size-5 text-muted-foreground/30" />
             </div>
             <p className="text-sm font-medium text-muted-foreground/50">
               Drop fields here
@@ -268,29 +254,23 @@ const FormCanvas = ({
             )}
           </div>
         ) : (
-          <SortableContext
-            items={fields.map((f) => f.id)}
-            strategy={verticalListSortingStrategy}
-          >
-            <div className="mx-auto max-w-lg space-y-1.5">
-              <AnimatePresence>
-                {fields.map((field) => (
-                  <SortableField
-                    field={field}
-                    isSelected={selectedId === field.id}
-                    key={field.id}
-                    onDuplicate={onDuplicate}
-                    onRemove={onRemove}
-                    onSelect={onSelect}
-                  />
-                ))}
-              </AnimatePresence>
-            </div>
-          </SortableContext>
+          <div className="mx-auto max-w-lg space-y-1.5">
+            <AnimatePresence>
+              {fields.map((field, index) => (
+                <SortableField
+                  field={field}
+                  index={index}
+                  isSelected={selectedId === field.id}
+                  key={field.id}
+                  onDuplicate={onDuplicate}
+                  onRemove={onRemove}
+                  onSelect={onSelect}
+                />
+              ))}
+            </AnimatePresence>
+          </div>
         )}
       </div>
     </div>
   );
-};
-
-export { FormCanvas };
+}

@@ -1,127 +1,229 @@
-import * as ToastPrimitives from "@radix-ui/react-toast";
-import { cva, type VariantProps } from "class-variance-authority";
-import { X } from "lucide-react";
+"use client";
+
+import { Toast as ToastPrimitive } from "@base-ui/react/toast";
+import {
+  CircleCheckIcon,
+  InfoIcon,
+  Loader2Icon,
+  OctagonXIcon,
+  TriangleAlertIcon,
+  XIcon,
+} from "lucide-react";
 import * as React from "react";
 
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
 
-const ToastProvider = ToastPrimitives.Provider;
+const toast = ToastPrimitive.createToastManager();
 
-const ToastViewport = React.forwardRef<
-  React.ComponentRef<typeof ToastPrimitives.Viewport>,
-  React.ComponentPropsWithoutRef<typeof ToastPrimitives.Viewport>
->(({ className, ...properties }, reference) => (
-  <ToastPrimitives.Viewport
-    className={cn(
-      "fixed top-0 z-100 flex max-h-screen w-full flex-col-reverse p-4 sm:top-auto sm:right-0 sm:bottom-0 sm:flex-col md:max-w-105",
-      className,
-    )}
-    ref={reference}
-    {...properties}
-  />
-));
-ToastViewport.displayName = ToastPrimitives.Viewport.displayName;
-
-const toastVariants = cva(
-  "group data-[state=open]:animate-in data-[state=closed]:animate-out data-[swipe=end]:animate-out data-[state=closed]:fade-out-80 data-[state=closed]:slide-out-to-right-full data-[state=open]:slide-in-from-top-full data-[state=open]:sm:slide-in-from-bottom-full pointer-events-auto relative flex w-full items-center justify-between space-x-4 overflow-hidden rounded-md border p-6 pr-8 shadow-lg transition-all data-[swipe=cancel]:translate-x-0 data-[swipe=end]:translate-x-[var(--radix-toast-swipe-end-x)] data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none",
-  {
-    defaultVariants: {
-      variant: "default",
-    },
-    variants: {
-      variant: {
-        default: "border bg-background text-foreground",
-        destructive:
-          "destructive group border-destructive bg-destructive text-destructive-foreground",
-      },
-    },
-  },
-);
-
-const Toast = React.forwardRef<
-  React.ComponentRef<typeof ToastPrimitives.Root>,
-  React.ComponentPropsWithoutRef<typeof ToastPrimitives.Root> &
-    VariantProps<typeof toastVariants>
->(({ className, variant, ...properties }, reference) => {
+function Toast({ className, ...props }: ToastPrimitive.Root.Props) {
   return (
-    <ToastPrimitives.Root
-      className={cn(toastVariants({ variant }), className)}
-      ref={reference}
-      {...properties}
+    <ToastPrimitive.Root
+      className={cn(
+        "group/toast pointer-events-auto absolute end-0 bottom-0 z-[calc(1000-var(--toast-index))] w-full origin-bottom rounded-2xl! border bg-popover text-popover-foreground shadow-lg will-change-transform outline-none select-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50",
+        "[--gap:0.75rem] [--height:var(--toast-frontmost-height,var(--toast-height))] [--offset-y:calc(var(--toast-offset-y)*-1+calc(var(--toast-index)*var(--gap)*-1)+var(--toast-swipe-movement-y))] [--peek:0.75rem] [--scale:calc(max(0,1-(var(--toast-index)*0.1)))] [--shrink:calc(1-var(--scale))]",
+        "h-(--height) [transform:translateX(var(--toast-swipe-movement-x))_translateY(calc(var(--toast-swipe-movement-y)-(var(--toast-index)*var(--peek))-(var(--shrink)*var(--height))))_scale(var(--scale))] [transition:transform_500ms_cubic-bezier(0.22,1,0.36,1),opacity_500ms,height_150ms]",
+        "after:absolute after:start-0 after:top-full after:h-[calc(var(--gap)+1px)] after:w-full after:content-['']",
+        "data-expanded:h-(--toast-height) data-expanded:[transform:translateX(var(--toast-swipe-movement-x))_translateY(var(--offset-y))]",
+        "data-limited:opacity-0 data-starting-style:[transform:translateY(150%)]",
+        "[&[data-ending-style]:not([data-limited]):not([data-swipe-direction])]:[transform:translateY(150%)]",
+        "data-ending-style:data-[swipe-direction=down]:[transform:translateY(calc(var(--toast-swipe-movement-y)+150%))]",
+        "data-ending-style:data-[swipe-direction=left]:[transform:translateX(calc(var(--toast-swipe-movement-x)-150%))_translateY(var(--offset-y))]",
+        "data-ending-style:data-[swipe-direction=right]:[transform:translateX(calc(var(--toast-swipe-movement-x)+150%))_translateY(var(--offset-y))]",
+        "data-ending-style:data-[swipe-direction=up]:[transform:translateY(calc(var(--toast-swipe-movement-y)-150%))]",
+        "data-expanded:data-ending-style:data-[swipe-direction=down]:[transform:translateY(calc(var(--toast-swipe-movement-y)+150%))]",
+        "data-expanded:data-ending-style:data-[swipe-direction=left]:[transform:translateX(calc(var(--toast-swipe-movement-x)-150%))_translateY(var(--offset-y))]",
+        "data-expanded:data-ending-style:data-[swipe-direction=right]:[transform:translateX(calc(var(--toast-swipe-movement-x)+150%))_translateY(var(--offset-y))]",
+        "data-expanded:data-ending-style:data-[swipe-direction=up]:[transform:translateY(calc(var(--toast-swipe-movement-y)-150%))]",
+        className,
+      )}
+      data-slot="toast"
+      {...props}
     />
   );
-});
-Toast.displayName = ToastPrimitives.Root.displayName;
+}
 
-const ToastAction = React.forwardRef<
-  React.ComponentRef<typeof ToastPrimitives.Action>,
-  React.ComponentPropsWithoutRef<typeof ToastPrimitives.Action>
->(({ className, ...properties }, reference) => (
-  <ToastPrimitives.Action
-    className={cn(
-      "inline-flex h-8 shrink-0 items-center justify-center rounded-md border bg-transparent px-3 text-sm font-medium ring-offset-background transition-colors group-[.destructive]:border-muted/40 hover:bg-secondary group-[.destructive]:hover:border-destructive/30 group-[.destructive]:hover:bg-destructive group-[.destructive]:hover:text-destructive-foreground focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:outline-none group-[.destructive]:focus:ring-destructive disabled:pointer-events-none disabled:opacity-50",
-      className,
-    )}
-    ref={reference}
-    {...properties}
-  />
-));
-ToastAction.displayName = ToastPrimitives.Action.displayName;
+function ToastAction({
+  className,
+  render = <Button size="sm" variant="outline" />,
+  ...props
+}: ToastPrimitive.Action.Props) {
+  return (
+    <ToastPrimitive.Action
+      className={cn("shrink-0", className)}
+      data-slot="toast-action"
+      render={render}
+      {...props}
+    />
+  );
+}
 
-const ToastClose = React.forwardRef<
-  React.ComponentRef<typeof ToastPrimitives.Close>,
-  React.ComponentPropsWithoutRef<typeof ToastPrimitives.Close>
->(({ className, ...properties }, reference) => (
-  <ToastPrimitives.Close
-    className={cn(
-      "absolute top-2 right-2 rounded-md p-1 text-foreground/50 opacity-0 transition-opacity group-hover:opacity-100 group-[.destructive]:text-red-300 hover:text-foreground group-[.destructive]:hover:text-red-50 focus:opacity-100 focus:ring-2 focus:outline-none group-[.destructive]:focus:ring-red-400 group-[.destructive]:focus:ring-offset-red-600",
-      className,
-    )}
-    ref={reference}
-    toast-close=""
-    {...properties}
-  >
-    <X className="size-4" />
-  </ToastPrimitives.Close>
-));
-ToastClose.displayName = ToastPrimitives.Close.displayName;
+function ToastClose({
+  children,
+  className,
+  render = <Button size="icon-sm" variant="ghost" />,
+  ...props
+}: ToastPrimitive.Close.Props) {
+  return (
+    <ToastPrimitive.Close
+      aria-label="Close toast"
+      className={cn(
+        "relative shrink-0 text-muted-foreground after:absolute after:-inset-2 after:content-[''] hover:text-foreground",
+        className,
+      )}
+      data-slot="toast-close"
+      render={render}
+      {...props}
+    >
+      {children ?? <XIcon aria-hidden="true" />}
+    </ToastPrimitive.Close>
+  );
+}
 
-const ToastTitle = React.forwardRef<
-  React.ComponentRef<typeof ToastPrimitives.Title>,
-  React.ComponentPropsWithoutRef<typeof ToastPrimitives.Title>
->(({ className, ...properties }, reference) => (
-  <ToastPrimitives.Title
-    className={cn("text-sm font-semibold", className)}
-    ref={reference}
-    {...properties}
-  />
-));
-ToastTitle.displayName = ToastPrimitives.Title.displayName;
+function ToastContent({ className, ...props }: ToastPrimitive.Content.Props) {
+  return (
+    <ToastPrimitive.Content
+      className={cn(
+        "flex h-full items-center gap-3 overflow-hidden p-4 transition-opacity duration-250 ease-[cubic-bezier(0.22,1,0.36,1)] data-behind:opacity-0 data-expanded:opacity-100",
+        className,
+      )}
+      data-slot="toast-content"
+      {...props}
+    />
+  );
+}
 
-const ToastDescription = React.forwardRef<
-  React.ComponentRef<typeof ToastPrimitives.Description>,
-  React.ComponentPropsWithoutRef<typeof ToastPrimitives.Description>
->(({ className, ...properties }, reference) => (
-  <ToastPrimitives.Description
-    className={cn("text-sm opacity-90", className)}
-    ref={reference}
-    {...properties}
-  />
-));
-ToastDescription.displayName = ToastPrimitives.Description.displayName;
+function ToastDescription({
+  className,
+  ...props
+}: ToastPrimitive.Description.Props) {
+  return (
+    <ToastPrimitive.Description
+      className={cn("text-sm text-muted-foreground", className)}
+      data-slot="toast-description"
+      {...props}
+    />
+  );
+}
 
-type ToastActionElement = React.ReactElement<typeof ToastAction>;
+function Toaster({
+  children,
+  toastManager = toast,
+  ...props
+}: ToastPrimitive.Provider.Props) {
+  return (
+    <ToastProvider toastManager={toastManager} {...props}>
+      {children}
+      <ToastPortal>
+        <ToastViewport>
+          <ToastList />
+        </ToastViewport>
+      </ToastPortal>
+    </ToastProvider>
+  );
+}
 
-type ToastProperties = React.ComponentPropsWithoutRef<typeof Toast>;
+function ToastIcon({ type }: { type: string | undefined }) {
+  let icon: React.ReactNode = null;
+
+  if (type === "success") {
+    icon = <CircleCheckIcon aria-hidden="true" />;
+  }
+
+  if (type === "info") {
+    icon = <InfoIcon aria-hidden="true" />;
+  }
+
+  if (type === "warning") {
+    icon = <TriangleAlertIcon aria-hidden="true" />;
+  }
+
+  if (type === "error") {
+    icon = <OctagonXIcon aria-hidden="true" className="text-destructive" />;
+  }
+
+  if (type === "loading") {
+    icon = <Loader2Icon aria-hidden="true" className="animate-spin" />;
+  }
+
+  if (!icon) {
+    return null;
+  }
+
+  return (
+    <span
+      className="shrink-0 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4"
+      data-slot="toast-icon"
+    >
+      {icon}
+    </span>
+  );
+}
+
+function ToastList() {
+  const { toasts } = ToastPrimitive.useToastManager();
+
+  return toasts.map((toastItem) => (
+    <Toast key={toastItem.id} toast={toastItem}>
+      <ToastContent>
+        <ToastIcon type={toastItem.type} />
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <ToastTitle />
+          <ToastDescription />
+        </div>
+        <ToastAction />
+        <ToastClose />
+      </ToastContent>
+    </Toast>
+  ));
+}
+
+function ToastPortal({ ...props }: ToastPrimitive.Portal.Props) {
+  return <ToastPrimitive.Portal data-slot="toast-portal" {...props} />;
+}
+
+function ToastProvider({ ...props }: ToastPrimitive.Provider.Props) {
+  return <ToastPrimitive.Provider {...props} />;
+}
+
+function ToastTitle({ className, ...props }: ToastPrimitive.Title.Props) {
+  return (
+    <ToastPrimitive.Title
+      className={cn("text-sm font-medium", className)}
+      data-slot="toast-title"
+      {...props}
+    />
+  );
+}
+
+function ToastViewport({ className, ...props }: ToastPrimitive.Viewport.Props) {
+  return (
+    <ToastPrimitive.Viewport
+      className={cn(
+        "pointer-events-none fixed inset-x-4 bottom-4 z-50 mx-auto w-auto max-w-sm outline-none sm:start-auto sm:end-4 sm:mx-0 sm:w-full",
+        className,
+      )}
+      data-slot="toast-viewport"
+      {...props}
+    />
+  );
+}
+
+const createToastManager = ToastPrimitive.createToastManager;
+const useToastManager = ToastPrimitive.useToastManager;
 
 export {
+  createToastManager,
   Toast,
+  toast,
   ToastAction,
-  type ToastActionElement,
   ToastClose,
+  ToastContent,
   ToastDescription,
-  type ToastProperties as ToastProps,
+  Toaster,
+  ToastPortal,
   ToastProvider,
   ToastTitle,
   ToastViewport,
+  useToastManager,
 };

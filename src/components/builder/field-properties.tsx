@@ -1,9 +1,9 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
-import { Eye, Plus, ShieldCheck, X } from "lucide-react";
+import { EyeIcon, PlusIcon, ShieldCheckIcon, XIcon } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
 
-import type { FieldCondition, FormField, ValidationRule } from "@/types/form";
+import type { FormField, ValidationRule } from "@/types/form";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -41,13 +41,13 @@ const ValidationRuleEditor = ({
   return (
     <motion.div
       animate={{ height: "auto", opacity: 1 }}
-      className="space-y-2 rounded-lg border border-border/60 bg-surface-2/50 p-2.5"
+      className="space-y-2 rounded-lg border border-border/60 bg-muted/50 p-2.5"
       exit={{ height: 0, opacity: 0 }}
       initial={{ height: 0, opacity: 0 }}
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
-          <ShieldCheck className="size-3 text-primary/60" />
+          <ShieldCheckIcon className="size-3 text-primary/60" />
           <span className="font-mono text-[10px] font-medium text-primary/80">
             {VALIDATION_LABELS[rule.type]}
           </span>
@@ -60,7 +60,7 @@ const ValidationRuleEditor = ({
           size="icon"
           variant="ghost"
         >
-          <X className="size-3" />
+          <XIcon className="size-3" />
         </Button>
       </div>
 
@@ -94,7 +94,7 @@ const ValidationRuleEditor = ({
   );
 };
 
-const FieldProperties = ({
+export function FieldProperties({
   allFields,
   field,
   fullWidth,
@@ -104,14 +104,14 @@ const FieldProperties = ({
   field: FormField | null;
   fullWidth?: boolean;
   onChange: (id: string, updates: Partial<FormField>) => void;
-}) => {
+}) {
   if (!field) {
     return (
       <div
         className={`${fullWidth ? "w-full" : "w-64"} flex items-center justify-center border-l border-border bg-background p-6`}
       >
         <div className="text-center">
-          <div className="mx-auto mb-3 flex size-10 items-center justify-center rounded-xl bg-surface-2">
+          <div className="mx-auto mb-3 flex size-10 items-center justify-center rounded-xl bg-muted">
             <span className="text-lg text-muted-foreground/30">⚙</span>
           </div>
           <p className="text-xs font-medium text-muted-foreground/40">
@@ -229,7 +229,9 @@ const FieldProperties = ({
             <Textarea
               className="resize-none font-mono text-xs"
               onChange={(event) => {
-                onChange(field.id, { options: event.target.value.split("\n") });
+                onChange(field.id, {
+                  options: event.target.value.split("\n"),
+                });
               }}
               placeholder="One per line"
               rows={3}
@@ -282,7 +284,7 @@ const FieldProperties = ({
                   size="sm"
                   variant="outline"
                 >
-                  <Plus className="size-2.5" />
+                  <PlusIcon className="size-2.5" />
                   {VALIDATION_LABELS[type]}
                 </Button>
               ))}
@@ -316,7 +318,7 @@ const FieldProperties = ({
 
           <div className="mb-2 flex items-center justify-between py-1">
             <Label className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground/70">
-              <Eye className="size-3" />
+              <EyeIcon className="size-3" />
               Show conditionally
             </Label>
             <Switch
@@ -336,7 +338,7 @@ const FieldProperties = ({
           {field.condition && (
             <motion.div
               animate={{ height: "auto", opacity: 1 }}
-              className="space-y-2 rounded-lg border border-border/60 bg-surface-2/50 p-2.5"
+              className="space-y-2 rounded-lg border border-border/60 bg-muted/50 p-2.5"
               exit={{ height: 0, opacity: 0 }}
               initial={{ height: 0, opacity: 0 }}
             >
@@ -346,7 +348,7 @@ const FieldProperties = ({
                 </Label>
                 <Select
                   onValueChange={(v) => {
-                    if (!field.condition) return;
+                    if (!field.condition || !v) return;
                     onChange(field.id, {
                       condition: { ...field.condition, fieldId: v },
                     });
@@ -379,11 +381,11 @@ const FieldProperties = ({
                 </Label>
                 <Select
                   onValueChange={(v) => {
-                    if (!field.condition) return;
+                    if (!field.condition || !v) return;
                     onChange(field.id, {
                       condition: {
                         ...field.condition,
-                        operator: v as FieldCondition["operator"],
+                        operator: v,
                       },
                     });
                   }}
@@ -439,6 +441,4 @@ const FieldProperties = ({
       </div>
     </motion.div>
   );
-};
-
-export { FieldProperties };
+}
