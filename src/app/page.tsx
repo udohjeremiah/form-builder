@@ -9,7 +9,6 @@ import {
   Columns3Icon,
   EyeIcon,
   LayersIcon,
-  ListOrderedIcon,
   PanelLeftIcon,
   Redo2Icon,
   Settings2Icon,
@@ -56,8 +55,6 @@ import {
   removeField,
   removeSection,
   removeStep,
-  resetIdCounters,
-  syncIdCounters,
   updateField,
   updateSectionAttributes,
   updateStepAttributes,
@@ -125,17 +122,6 @@ export default function BuilderPage() {
   useEffect(() => {
     const initialDraft = loadDraft();
     if (!initialDraft) return;
-    let maxField = 0;
-    let maxStep = 0;
-    for (const field of getAllFields(initialDraft)) {
-      const n = /^field_(\d+)/.exec(field.id);
-      if (n?.[1]) maxField = Math.max(maxField, Number.parseInt(n[1], 10));
-    }
-    for (const step of initialDraft.steps) {
-      const n = /^step_(\d+)/.exec(step.id);
-      if (n?.[1]) maxStep = Math.max(maxStep, Number.parseInt(n[1], 10));
-    }
-    syncIdCounters({ field: maxField, step: maxStep });
     resetHistory(initialDraft);
     const ago = Date.now() - initialDraft.savedAt;
     let agoText = "just now";
@@ -267,6 +253,30 @@ export default function BuilderPage() {
   const selectStep = useCallback((id: string) => {
     setSelection({ id, kind: "step" });
   }, []);
+
+  const handleMoveStep = useCallback(
+    (fromIndex: number, toIndex: number) => {
+      setFormState((previous) => moveStep(previous, fromIndex, toIndex));
+      // Keep editing the same step after it lands in its new position.
+      setActiveStepIndex((previous) => {
+        if (fromIndex === previous)
+          return Math.min(Math.max(toIndex, 0), steps.length - 1);
+        if (fromIndex < previous && toIndex >= previous) return previous - 1;
+        if (fromIndex > previous && toIndex <= previous) return previous + 1;
+        return previous;
+      });
+    },
+    [setFormState, steps.length],
+  );
+
+  const handleMoveSection = useCallback(
+    (stepIndex: number, fromIndex: number, toIndex: number) => {
+      setFormState((previous) =>
+        moveSection(previous, stepIndex, fromIndex, toIndex),
+      );
+    },
+    [setFormState],
+  );
 
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
@@ -435,30 +445,6 @@ export default function BuilderPage() {
     [selection, setFormState, steps],
   );
 
-  const handleMoveStep = useCallback(
-    (fromIndex: number, toIndex: number) => {
-      setFormState((previous) => moveStep(previous, fromIndex, toIndex));
-      // Keep editing the same step after it lands in its new position.
-      setActiveStepIndex((previous) => {
-        if (fromIndex === previous)
-          return Math.min(Math.max(toIndex, 0), steps.length - 1);
-        if (fromIndex < previous && toIndex >= previous) return previous - 1;
-        if (fromIndex > previous && toIndex <= previous) return previous + 1;
-        return previous;
-      });
-    },
-    [setFormState, steps.length],
-  );
-
-  const handleMoveSection = useCallback(
-    (stepIndex: number, fromIndex: number, toIndex: number) => {
-      setFormState((previous) =>
-        moveSection(previous, stepIndex, fromIndex, toIndex),
-      );
-    },
-    [setFormState],
-  );
-
   const handleStructureChange = useCallback(
     (_id: string, patch: SectionAttributes | StepAttributes) => {
       if (!selection || selection.kind === "field") return;
@@ -474,7 +460,6 @@ export default function BuilderPage() {
 
   const handleClearDraft = useCallback(() => {
     localStorage.removeItem(STORAGE_KEY);
-    resetIdCounters();
     resetHistory(createDefaultDefinition());
     setActiveStepIndex(0);
     setSelection(null);
@@ -607,16 +592,6 @@ export default function BuilderPage() {
             onClick={handleClearDraft}
           >
             Clear
-          </button>
-
-          <Separator className="hidden h-4 sm:block" orientation="vertical" />
-
-          <button
-            className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-medium text-muted-foreground/60 transition-all hover:bg-accent hover:text-foreground md:px-2.5"
-            onClick={handleAddStep}
-          >
-            <ListOrderedIcon className="size-3.5" />
-            <span className="hidden sm:inline">Add step</span>
           </button>
 
           {/* Desktop-only: Preview/Schema toggle */}

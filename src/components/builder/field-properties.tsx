@@ -330,7 +330,7 @@ export function FieldProperties({
                   conditions: {
                     ...field.conditions,
                     show: checked
-                      ? { fieldId: "", operator: "not_empty" }
+                      ? { fieldId: "", operator: "not_empty", value: "" }
                       : undefined,
                   },
                 }));
@@ -430,7 +430,7 @@ export function FieldProperties({
                       }));
                     }}
                     placeholder="Expected value..."
-                    value={field.conditions.show.value}
+                    value={field.conditions.show.value ?? ""}
                   />
                 </div>
               )}

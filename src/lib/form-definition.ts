@@ -14,38 +14,26 @@ import { getFieldEntry } from "@/lib/field-registry";
 
 const FORM_DEFINITION_VERSION = 1;
 
-let fieldCounter = 0;
-let sectionCounter = 0;
-let stepCounter = 0;
+// Random, position-independent identifiers: nothing encodes order or time,
+// so ids survive reordering and never collide across restored drafts.
+const ID_ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyz";
 
-const newFieldId = () => {
-  fieldCounter++;
-  return `field_${fieldCounter}_${Date.now()}`;
+const randomId = (prefix: string): string => {
+  const bytes = globalThis.crypto.getRandomValues(new Uint8Array(8));
+  const suffix = Array.from(
+    bytes,
+    (byte) => ID_ALPHABET[byte % ID_ALPHABET.length],
+  ).join("");
+  return `${prefix}_${suffix}`;
 };
 
-const newSectionId = () => {
-  sectionCounter++;
-  return `section_${sectionCounter}_${Date.now()}`;
-};
+const newFieldId = () => randomId("fld");
 
-const newStepId = () => {
-  stepCounter++;
-  return `step_${stepCounter}_${Date.now()}`;
-};
+const newSectionId = () => randomId("sec");
 
-const newFormId = () => `form_${Date.now().toString(36)}`;
+const newStepId = () => randomId("st");
 
-export const resetIdCounters = () => {
-  fieldCounter = 0;
-  sectionCounter = 0;
-  stepCounter = 0;
-};
-
-/** Raises the internal id counters so newly generated ids never collide with restored ones. */
-export const syncIdCounters = (maxima: { field: number; step: number }) => {
-  fieldCounter = Math.max(fieldCounter, maxima.field);
-  stepCounter = Math.max(stepCounter, maxima.step);
-};
+const newFormId = () => randomId("frm");
 
 const createSection = (
   fields: AnyFieldDefinition[] = [],

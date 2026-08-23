@@ -477,7 +477,7 @@ const ProgressBar = ({
                     : "text-muted-foreground",
                 )}
               >
-                {step.attributes.title ?? "Untitled step"}
+                {step.attributes.title ?? `Step ${index + 1}`}
               </span>
             </div>
             {index < steps.length - 1 && (
@@ -620,7 +620,8 @@ export function FormPreview({ definition }: { definition: FormDefinition }) {
               {multiStepEnabled && (
                 <div className="mb-4">
                   <h4 className="text-sm font-semibold text-foreground">
-                    {steps[currentStep]?.attributes.title ?? "Untitled step"}
+                    {steps[currentStep]?.attributes.title ??
+                      `Step ${currentStep + 1}`}
                   </h4>
                   {steps[currentStep]?.attributes.description && (
                     <p className="mt-1 text-xs text-muted-foreground">
@@ -656,63 +657,63 @@ export function FormPreview({ definition }: { definition: FormDefinition }) {
                           )}
                         </div>
                       )}
-                    {group.fields.map((field, fieldIndex) => {
-                      const fieldError = errors[field.id];
-                      const fieldTouched = touched[field.id];
-                      const index =
-                        (groupOffsets[groupIndex] ?? 0) + fieldIndex;
-                      return (
-                        <div
-                          className="animate-in space-y-1.5 duration-300 fill-mode-both fade-in slide-in-from-bottom-2"
-                          key={field.id}
-                          style={{ animationDelay: `${index * 50}ms` }}
-                        >
-                          {field.type !== "checkbox" &&
-                            field.type !== "toggle" && (
-                              <>
-                                <Label className="flex items-center gap-1 text-sm font-medium text-foreground">
-                                  {field.attributes.label}
-                                  {field.attributes.required && (
-                                    <span className="text-xs text-primary">
-                                      *
-                                    </span>
+                      {group.fields.map((field, fieldIndex) => {
+                        const fieldError = errors[field.id];
+                        const fieldTouched = touched[field.id];
+                        const index =
+                          (groupOffsets[groupIndex] ?? 0) + fieldIndex;
+                        return (
+                          <div
+                            className="animate-in space-y-1.5 duration-300 fill-mode-both fade-in slide-in-from-bottom-2"
+                            key={field.id}
+                            style={{ animationDelay: `${index * 50}ms` }}
+                          >
+                            {field.type !== "checkbox" &&
+                              field.type !== "toggle" && (
+                                <>
+                                  <Label className="flex items-center gap-1 text-sm font-medium text-foreground">
+                                    {field.attributes.label}
+                                    {field.attributes.required && (
+                                      <span className="text-xs text-primary">
+                                        *
+                                      </span>
+                                    )}
+                                  </Label>
+                                  {field.attributes.description && (
+                                    <p className="text-xs text-muted-foreground">
+                                      {field.attributes.description}
+                                    </p>
                                   )}
-                                </Label>
-                                {field.attributes.description && (
-                                  <p className="text-xs text-muted-foreground">
-                                    {field.attributes.description}
-                                  </p>
-                                )}
-                              </>
+                                </>
+                              )}
+                            <FieldInput
+                              error={fieldError ?? null}
+                              field={field}
+                              onBlur={() => {
+                                handleBlur(field.id);
+                              }}
+                              onChange={(value) => {
+                                handleChange(field.id, value);
+                              }}
+                              touched={!!fieldTouched}
+                              value={values[field.id] ?? ""}
+                            />
+                            {(field.type === "checkbox" ||
+                              field.type === "toggle") &&
+                              field.attributes.description && (
+                                <p className="text-xs text-muted-foreground">
+                                  {field.attributes.description}
+                                </p>
+                              )}
+                            {fieldTouched && fieldError && (
+                              <div className="flex items-center gap-1.5 pt-1 text-xs text-destructive">
+                                <AlertCircleIcon className="size-3 shrink-0" />
+                                <span>{fieldError}</span>
+                              </div>
                             )}
-                          <FieldInput
-                            error={fieldError ?? null}
-                            field={field}
-                            onBlur={() => {
-                              handleBlur(field.id);
-                            }}
-                            onChange={(value) => {
-                              handleChange(field.id, value);
-                            }}
-                            touched={!!fieldTouched}
-                            value={values[field.id] ?? ""}
-                          />
-                          {(field.type === "checkbox" ||
-                            field.type === "toggle") &&
-                            field.attributes.description && (
-                              <p className="text-xs text-muted-foreground">
-                                {field.attributes.description}
-                              </p>
-                            )}
-                          {fieldTouched && fieldError && (
-                            <div className="flex items-center gap-1.5 pt-1 text-xs text-destructive">
-                              <AlertCircleIcon className="size-3 shrink-0" />
-                              <span>{fieldError}</span>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                          </div>
+                        );
+                      })}
                     </Fragment>
                   );
                 })

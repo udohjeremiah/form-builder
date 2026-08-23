@@ -38,6 +38,7 @@ const SectionCard = ({
   canMoveUp,
   canRemove,
   entry,
+  index,
   isSelected,
   onDuplicate,
   onMove,
@@ -52,6 +53,7 @@ const SectionCard = ({
   canMoveUp: boolean;
   canRemove: boolean;
   entry: CanvasSection;
+  index: number;
   isSelected: boolean;
   onDuplicate: (id: string) => void;
   onMove: (delta: -1 | 1) => void;
@@ -97,7 +99,7 @@ const SectionCard = ({
               : "border-border text-muted-foreground",
           )}
         >
-          {startIndex + 1}
+          {index + 1}
         </span>
         <span
           className={cn(
@@ -106,7 +108,7 @@ const SectionCard = ({
               "text-muted-foreground/40 italic",
           )}
         >
-          {entry.section.attributes.title ?? "Untitled section"}
+          {entry.section.attributes.title ?? `Section ${index + 1}`}
         </span>
         {canMoveUp && (
           <span
@@ -302,7 +304,8 @@ export function FormCanvas({
   selectedSectionId: null | string;
   steps: StepDefinition[];
 }) {
-  // Multi-step is derived from the model; single-step forms show no step UI.
+  // Multi-step is derived from the model; a lone step renders as one quiet
+  // tab chip that still selects the step for attribute editing.
   const multiStepEnabled = steps.length > 1;
 
   const { isDropTarget, ref } = useDroppable({ id: "canvas" });
@@ -331,8 +334,7 @@ export function FormCanvas({
   }
 
   // Each rendered section also needs its position within its own step so
-  // reorder arrows know their edges (several steps' sections may render
-  // together when the form has a single step).
+  // reorder arrows know their edges.
   const nextPositionByStep = new Map<number, number>();
   const positionBySectionId = new Map<
     string,
@@ -358,7 +360,8 @@ export function FormCanvas({
       {multiStepEnabled && (
         <p className="mt-1 text-[11px] text-muted-foreground/30">
           Adding to{" "}
-          {steps[activeStepIndex]?.attributes.title ?? "Untitled step"}
+          {steps[activeStepIndex]?.attributes.title ??
+            `Step ${activeStepIndex + 1}`}
         </p>
       )}
     </div>
@@ -377,6 +380,7 @@ export function FormCanvas({
             canMoveUp={position.index > 0}
             canRemove={(sectionCountsByStep.get(entry.stepIndex) ?? 0) > 1}
             entry={entry}
+            index={sectionIndex}
             isSelected={selectedSectionId === entry.section.id}
             key={entry.section.id}
             onDuplicate={onDuplicate}
@@ -435,81 +439,79 @@ export function FormCanvas({
         </span>
       </div>
 
-      {/* Step tabs */}
-      {multiStepEnabled && (
-        <div className="flex items-center gap-1 overflow-x-auto border-b border-border bg-background px-3 py-1.5">
-          {steps.map((step, index) => (
-            <div className="flex shrink-0 items-center" key={step.id}>
-              <button
+      {/* Step tabs; a single step stays selectable through its quiet chip */}
+      <div className="flex items-center gap-1 overflow-x-auto border-b border-border bg-background px-3 py-1.5">
+        {steps.map((step, index) => (
+          <div className="flex shrink-0 items-center" key={step.id}>
+            <button
+              className={cn(
+                "group flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium whitespace-nowrap transition-all",
+                activeStepIndex === index
+                  ? "bg-primary/10 text-primary"
+                  : "text-muted-foreground hover:bg-accent hover:text-foreground",
+              )}
+              onClick={() => {
+                onStepChange(index);
+                onSelectStep(step.id);
+              }}
+              type="button"
+            >
+              <span
                 className={cn(
-                  "group flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium whitespace-nowrap transition-all",
+                  "flex size-5 items-center justify-center rounded-full border text-[10px] font-bold",
                   activeStepIndex === index
-                    ? "bg-primary/10 text-primary"
-                    : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                    ? "border-primary/40 bg-primary/10"
+                    : "border-border",
                 )}
-                onClick={() => {
-                  onStepChange(index);
-                  onSelectStep(step.id);
-                }}
-                type="button"
               >
+                {index + 1}
+              </span>
+              {step.attributes.title ?? `Step ${index + 1}`}
+              {index > 0 && multiStepEnabled && (
                 <span
-                  className={cn(
-                    "flex size-5 items-center justify-center rounded-full border text-[10px] font-bold",
-                    activeStepIndex === index
-                      ? "border-primary/40 bg-primary/10"
-                      : "border-border",
-                  )}
+                  className="ml-0.5 opacity-0 transition-all group-hover:opacity-100 hover:text-foreground"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onMoveStep(index, index - 1);
+                  }}
                 >
-                  {index + 1}
+                  <ChevronLeftIcon className="size-3" />
                 </span>
-                {step.attributes.title ?? "Untitled step"}
-                {index > 0 && (
-                  <span
-                    className="ml-0.5 opacity-0 transition-all group-hover:opacity-100 hover:text-foreground"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onMoveStep(index, index - 1);
-                    }}
-                  >
-                    <ChevronLeftIcon className="size-3" />
-                  </span>
-                )}
-                {index < steps.length - 1 && (
-                  <span
-                    className="ml-0.5 opacity-0 transition-all group-hover:opacity-100 hover:text-foreground"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onMoveStep(index, index + 1);
-                    }}
-                  >
-                    <ChevronRightIcon className="size-3" />
-                  </span>
-                )}
-                {steps.length > 1 && (
-                  <span
-                    className="ml-0.5 opacity-0 transition-all group-hover:opacity-100 hover:text-destructive"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onRemoveStep(index);
-                    }}
-                  >
-                    <XIcon className="size-3" />
-                  </span>
-                )}
-              </button>
-            </div>
-          ))}
-          <Button
-            className="size-7 shrink-0 text-muted-foreground/40 hover:text-primary"
-            onClick={onAddStep}
-            size="icon"
-            variant="ghost"
-          >
-            <PlusIcon className="size-3.5" />
-          </Button>
-        </div>
-      )}
+              )}
+              {index < steps.length - 1 && multiStepEnabled && (
+                <span
+                  className="ml-0.5 opacity-0 transition-all group-hover:opacity-100 hover:text-foreground"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onMoveStep(index, index + 1);
+                  }}
+                >
+                  <ChevronRightIcon className="size-3" />
+                </span>
+              )}
+              {multiStepEnabled && (
+                <span
+                  className="ml-0.5 opacity-0 transition-all group-hover:opacity-100 hover:text-destructive"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onRemoveStep(index);
+                  }}
+                >
+                  <XIcon className="size-3" />
+                </span>
+              )}
+            </button>
+          </div>
+        ))}
+        <Button
+          className="size-7 shrink-0 text-muted-foreground/40 hover:text-primary"
+          onClick={onAddStep}
+          size="icon"
+          variant="ghost"
+        >
+          <PlusIcon className="size-3.5" />
+        </Button>
+      </div>
 
       {/* Drop zone */}
       <div
