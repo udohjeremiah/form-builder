@@ -29,7 +29,7 @@ import type { FieldType } from "@/types/form-definition";
 
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/cn";
-import { FIELD_TYPES } from "@/types/form-definition";
+import { FIELD_TYPE_LIST } from "@/lib/field-registry";
 
 const iconMap: Record<string, React.FC<{ className?: string }>> = {
   AlignLeftIcon,
@@ -153,7 +153,7 @@ export function FieldPalette({
         <div
           className={isTapMode ? "space-y-1.5 px-1 pb-4" : "space-y-0.5 pb-4"}
         >
-          {FIELD_TYPES.map((field) =>
+          {FIELD_TYPE_LIST.map((field) =>
             isTapMode ? (
               <TappableField {...field} key={field.type} onTap={onTapAdd} />
             ) : (

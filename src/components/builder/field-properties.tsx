@@ -24,42 +24,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/cn";
 import {
   CONDITION_OPERATORS,
+  getFieldEntry,
   VALIDATION_LABELS,
-  VALIDATION_OPTIONS,
-} from "@/types/form-definition";
+} from "@/lib/field-registry";
 
 const parseNumberInput = (raw: string): number | undefined => {
   if (raw.trim() === "") return undefined;
   const parsed = Number(raw);
   return Number.isNaN(parsed) ? undefined : parsed;
 };
-
-const LENGTH_TYPE_NAMES = new Set([
-  "email",
-  "password",
-  "phone",
-  "text",
-  "textarea",
-  "url",
-]);
-
-type LengthField = Extract<
-  AnyFieldDefinition,
-  {
-    type: "email" | "password" | "phone" | "text" | "textarea" | "url";
-  }
->;
-
-const isLengthField = (field: AnyFieldDefinition): field is LengthField =>
-  LENGTH_TYPE_NAMES.has(field.type);
-
-type NumericField = Extract<
-  AnyFieldDefinition,
-  { type: "number" | "rating" | "slider" }
->;
-
-const isNumericField = (field: AnyFieldDefinition): field is NumericField =>
-  ["number", "rating", "slider"].includes(field.type);
 
 const NumberAttribute = ({
   label,
@@ -210,7 +183,8 @@ export function FieldProperties({
     );
   }
 
-  const availableValidations = VALIDATION_OPTIONS[field.type];
+  const entry = getFieldEntry(field.type);
+  const availableValidations = entry.validation;
   const currentRules = field.validation;
   const usedTypes = new Set(currentRules.map((r) => r.type));
   const addableRules = availableValidations.filter(
@@ -260,6 +234,16 @@ export function FieldProperties({
     onChange(field.id, () => ({
       ...field,
       attributes: { ...field.attributes, ...patch },
+    }));
+  };
+
+  const setAttributeValue = (key: string, value: unknown) => {
+    onChange(field.id, () => ({
+      ...field,
+      attributes: {
+        ...field.attributes,
+        [key]: value,
+      },
     }));
   };
 
@@ -322,118 +306,96 @@ export function FieldProperties({
           />
         </div>
 
-        {isLengthField(field) && (
-          <>
-            <NumberAttribute
-              label="Min Length"
-              onValueChange={(v) => {
-                setAttribute({ minLength: v });
-              }}
-              value={field.attributes.minLength}
-            />
-            <NumberAttribute
-              label="Max Length"
-              onValueChange={(v) => {
-                setAttribute({ maxLength: v });
-              }}
-              value={field.attributes.maxLength}
-            />
-            <TextAttribute
-              label="AutoComplete"
-              onValueChange={(v) => {
-                setAttribute({ autoComplete: v === "" ? undefined : v });
-              }}
-              placeholder="e.g. email"
-              value={field.attributes.autoComplete ?? ""}
-            />
-          </>
-        )}
+        {entry.attributes.map((meta) => {
+          const value = (
+            field.attributes as unknown as Record<string, unknown>
+          )[meta.key];
 
-        {isNumericField(field) && (
-          <>
-            <NumberAttribute
-              label="Min Value"
-              onValueChange={(v) => {
-                setAttribute({ min: v });
-              }}
-              value={field.attributes.min}
-            />
-            <NumberAttribute
-              label="Max Value"
-              onValueChange={(v) => {
-                setAttribute({ max: v });
-              }}
-              value={field.attributes.max}
-            />
-            {field.type !== "rating" && (
-              <NumberAttribute
-                label="Step"
+          if (meta.kind === "boolean") {
+            return (
+              <div
+                className="flex items-center justify-between py-1"
+                key={meta.key}
+              >
+                <Label className="text-[11px] font-medium text-muted-foreground/70">
+                  {meta.label}
+                </Label>
+                <Switch
+                  checked={!!value}
+                  onCheckedChange={(checked) => {
+                    setAttributeValue(meta.key, checked);
+                  }}
+                />
+              </div>
+            );
+          }
+
+          if (meta.kind === "csv") {
+            return (
+              <TextAttribute
+                key={meta.key}
+                label={meta.label}
                 onValueChange={(v) => {
-                  setAttribute({ step: v });
-                }}
-                value={field.attributes.step}
-              />
-            )}
-          </>
-        )}
-
-        {field.type === "file" && (
-          <>
-            <TextAttribute
-              label="Accept"
-              onValueChange={(v) => {
-                setAttribute({
-                  accept:
+                  setAttributeValue(
+                    meta.key,
                     v.trim() === ""
                       ? undefined
                       : v
                           .split(",")
                           .map((part) => part.trim())
                           .filter(Boolean),
-                });
-              }}
-              placeholder=".pdf, .png"
-              value={(field.attributes.accept ?? []).join(", ")}
-            />
-            <NumberAttribute
-              label="Max Size (bytes)"
-              onValueChange={(v) => {
-                setAttribute({ maxSize: v });
-              }}
-              value={field.attributes.maxSize}
-            />
-            <div className="flex items-center justify-between py-1">
-              <Label className="text-[11px] font-medium text-muted-foreground/70">
-                Multiple Files
-              </Label>
-              <Switch
-                checked={!!field.attributes.multiple}
-                onCheckedChange={(v) => {
-                  setAttribute({ multiple: v });
+                  );
                 }}
+                placeholder={meta.placeholder}
+                value={(Array.isArray(value) ? value : []).join(", ")}
               />
-            </div>
-          </>
-        )}
+            );
+          }
 
-        {(field.type === "select" || field.type === "radio") && (
-          <div className="space-y-1">
-            <Label className="text-[11px] font-medium text-muted-foreground/70">
-              Options
-            </Label>
-            <Textarea
-              className="resize-none font-mono text-xs"
-              onChange={(event) => {
-                setAttribute({
-                  options: event.target.value.split("\n"),
-                });
+          if (meta.kind === "lines") {
+            return (
+              <div className="space-y-1" key={meta.key}>
+                <Label className="text-[11px] font-medium text-muted-foreground/70">
+                  {meta.label}
+                </Label>
+                <Textarea
+                  className="resize-none font-mono text-xs"
+                  onChange={(event) => {
+                    setAttributeValue(meta.key, event.target.value.split("\n"));
+                  }}
+                  placeholder={meta.placeholder}
+                  rows={3}
+                  value={(Array.isArray(value) ? value : []).join("\n")}
+                />
+              </div>
+            );
+          }
+
+          if (meta.kind === "number") {
+            return (
+              <NumberAttribute
+                key={meta.key}
+                label={meta.label}
+                onValueChange={(v) => {
+                  setAttributeValue(meta.key, v);
+                }}
+                value={typeof value === "number" ? value : undefined}
+              />
+            );
+          }
+
+          return (
+            <TextAttribute
+              key={meta.key}
+              label={meta.label}
+              onValueChange={(v) => {
+                setAttributeValue(meta.key, v === "" ? undefined : v);
               }}
-              placeholder="One per line"
-              rows={3}
-              value={(field.attributes.options ?? []).join("\n")}
+              placeholder={meta.placeholder}
+              value={typeof value === "string" ? value : ""}
             />
-          </div>
-        )}
+          );
+        })}
 
         <Separator className="my-1" />
 

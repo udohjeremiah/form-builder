@@ -833,10 +833,7 @@ export default function BuilderPage() {
           {renderProperties()}
 
           <div className="flex w-90 min-w-0 flex-col border-l border-border bg-background">
-            <div
-              className="flex min-h-0 flex-1 animate-in flex-col duration-200 fade-in"
-              key={rightPanel}
-            >
+            <div className="flex min-h-0 flex-1 flex-col">
               {rightPanel === "preview" ? (
                 <FormPreview definition={formState} />
               ) : (

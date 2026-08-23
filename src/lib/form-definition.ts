@@ -9,6 +9,8 @@ import type {
   TitledAttributes,
 } from "@/types/form-definition";
 
+import { getFieldEntry, hasAttribute } from "@/lib/field-registry";
+
 const FORM_DEFINITION_VERSION = 1;
 
 let fieldCounter = 0;
@@ -44,27 +46,6 @@ export const syncIdCounters = (maxima: { field: number; step: number }) => {
   stepCounter = Math.max(stepCounter, maxima.step);
 };
 
-const FIELD_LABELS: Record<FieldType, string> = {
-  checkbox: "Checkbox",
-  color: "Color Picker",
-  date: "Date",
-  datetime: "Date & Time",
-  email: "Email",
-  file: "File Upload",
-  number: "Number",
-  password: "Password",
-  phone: "Phone",
-  radio: "Radio Group",
-  rating: "Rating",
-  select: "Dropdown",
-  slider: "Slider",
-  text: "Text Field",
-  textarea: "Message",
-  time: "Time",
-  toggle: "Toggle",
-  url: "URL",
-};
-
 const createSection = (
   fields: AnyFieldDefinition[] = [],
 ): SectionDefinition => ({
@@ -90,16 +71,13 @@ export const createDefaultDefinition = (): FormDefinition => ({
 });
 
 export const newField = (type: FieldType): AnyFieldDefinition => {
-  const label = FIELD_LABELS[type];
-  const base = {
-    label,
-    placeholder: `Enter ${label.toLowerCase()}...`,
-    ...(type === "select" || type === "radio"
-      ? { options: ["Option 1", "Option 2", "Option 3"] }
-      : {}),
-  };
+  const entry = getFieldEntry(type);
   return {
-    attributes: base,
+    attributes: {
+      ...entry.defaults(),
+      label: entry.label,
+      placeholder: `Enter ${entry.label.toLowerCase()}...`,
+    },
     conditions: {},
     id: newFieldId(),
     type,
@@ -375,8 +353,6 @@ export const setSections = (
   attributes: { ...definition.attributes, sections: enabled },
 });
 
-const NUMERIC_BOUND_TYPES = new Set(["number", "rating", "slider"]);
-
 export function isFieldVisible(
   field: AnyFieldDefinition,
   values: Record<string, string>,
@@ -445,7 +421,7 @@ export function validateFieldValue(
         break;
       }
       case "max": {
-        if (NUMERIC_BOUND_TYPES.has(field.type)) {
+        if (hasAttribute(field.type, "min")) {
           if (Number(value) > Number(rule.value))
             return rule.message || `Maximum value is ${rule.value}`;
         } else {
@@ -455,7 +431,7 @@ export function validateFieldValue(
         break;
       }
       case "min": {
-        if (NUMERIC_BOUND_TYPES.has(field.type)) {
+        if (hasAttribute(field.type, "min")) {
           if (Number(value) < Number(rule.value))
             return rule.message || `Minimum value is ${rule.value}`;
         } else {

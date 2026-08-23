@@ -66,10 +66,7 @@ export function SchemaOutput({ definition }: { definition: FormDefinition }) {
             </p>
           </div>
         ) : (
-          <pre
-            className="animate-in font-mono text-xs leading-relaxed text-foreground duration-200 fade-in"
-            key={`${definition.attributes.multiStep ? 1 : 0}-${fieldCount}`}
-          >
+          <pre className="font-mono text-xs leading-relaxed text-foreground">
             <code>{code}</code>
           </pre>
         )}
