@@ -4,9 +4,10 @@ import type {
   FieldType,
   FormDefinition,
   PersistedFormDefinition,
+  SectionAttributes,
   SectionDefinition,
+  StepAttributes,
   StepDefinition,
-  TitledAttributes,
 } from "@/types/form-definition";
 
 import { getFieldEntry } from "@/lib/field-registry";
@@ -64,7 +65,6 @@ const createStepDefinition = (): StepDefinition => {
 };
 
 export const createDefaultDefinition = (): FormDefinition => ({
-  attributes: { multiStep: false, sections: false },
   id: newFormId(),
   steps: [createStepDefinition()],
   version: FORM_DEFINITION_VERSION,
@@ -293,11 +293,11 @@ export const removeSection = (
   })),
 });
 
-/** Patches the title/description attributes of a step identified by id. */
+/** Patches the attributes of a step identified by id. */
 export const updateStepAttributes = (
   definition: FormDefinition,
   stepId: string,
-  patch: TitledAttributes,
+  patch: Partial<StepAttributes>,
 ): FormDefinition => ({
   ...definition,
   steps: definition.steps.map((step) =>
@@ -311,7 +311,7 @@ export const updateStepAttributes = (
 export const updateSectionAttributes = (
   definition: FormDefinition,
   sectionId: string,
-  patch: TitledAttributes,
+  patch: Partial<SectionAttributes>,
 ): FormDefinition => ({
   ...definition,
   steps: definition.steps.map((step) => ({
@@ -332,24 +332,53 @@ export const removeStep = (
   steps: definition.steps.filter((_, stepIndex) => stepIndex !== index),
 });
 
-export const setMultiStep = (
+/** Moves a step to a new position within the form. */
+export const moveStep = (
   definition: FormDefinition,
-  enabled: boolean,
-): FormDefinition => ({
-  ...definition,
-  attributes: { ...definition.attributes, multiStep: enabled },
-  steps:
-    enabled && definition.steps.length === 0
-      ? [createStepDefinition()]
-      : definition.steps,
-});
+  fromIndex: number,
+  toIndex: number,
+): FormDefinition => {
+  if (
+    fromIndex === toIndex ||
+    fromIndex < 0 ||
+    toIndex < 0 ||
+    fromIndex >= definition.steps.length ||
+    toIndex >= definition.steps.length
+  ) {
+    return definition;
+  }
+  const steps = [...definition.steps];
+  const [moved] = steps.splice(fromIndex, 1);
+  if (!moved) return definition;
+  steps.splice(toIndex, 0, moved);
+  return { ...definition, steps };
+};
 
-export const setSections = (
+/** Moves a section to a new position within one step of the form. */
+export const moveSection = (
   definition: FormDefinition,
-  enabled: boolean,
+  stepIndex: number,
+  fromIndex: number,
+  toIndex: number,
 ): FormDefinition => ({
   ...definition,
-  attributes: { ...definition.attributes, sections: enabled },
+  steps: definition.steps.map((step, index) => {
+    if (
+      index !== stepIndex ||
+      fromIndex === toIndex ||
+      fromIndex < 0 ||
+      toIndex < 0 ||
+      fromIndex >= step.sections.length ||
+      toIndex >= step.sections.length
+    ) {
+      return step;
+    }
+    const sections = [...step.sections];
+    const [moved] = sections.splice(fromIndex, 1);
+    if (!moved) return step;
+    sections.splice(toIndex, 0, moved);
+    return { ...step, sections };
+  }),
 });
 
 export function isFieldVisible(
@@ -464,7 +493,6 @@ export const normalizePersisted = (
   // Deliberately permissive view of the payload: persisted JSON is untrusted,
   // so every member stays nullable until validated below.
   const data = raw as {
-    attributes?: FormDefinition["attributes"] | null;
     id?: unknown;
     savedAt?: unknown;
     steps?: { id?: unknown; sections?: unknown }[];
@@ -475,8 +503,6 @@ export const normalizePersisted = (
   if (
     data.version === FORM_DEFINITION_VERSION &&
     typeof data.id === "string" &&
-    typeof data.attributes === "object" &&
-    data.attributes !== null &&
     Array.isArray(data.steps) &&
     data.steps.every(
       (step) =>
@@ -486,8 +512,10 @@ export const normalizePersisted = (
     )
   ) {
     return {
-      ...(raw as FormDefinition),
+      id: data.id,
       savedAt,
+      steps: data.steps as FormDefinition["steps"],
+      version: FORM_DEFINITION_VERSION,
     };
   }
   return null;

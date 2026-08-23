@@ -89,19 +89,9 @@ export interface FileFieldAttributes extends BaseFieldAttributes {
 }
 
 export interface FormDefinition {
-  attributes: FormDefinitionAttributes;
   id: string;
   steps: StepDefinition[];
   version: number;
-}
-
-export interface FormDefinitionAttributes {
-  autosave?: boolean;
-  description?: string;
-  multiStep?: boolean;
-  name?: string;
-  sections?: boolean;
-  submitLabel?: string;
 }
 
 export interface NumberFieldAttributes extends BaseFieldAttributes {
@@ -137,8 +127,13 @@ export interface RatingFieldAttributes extends BaseFieldAttributes {
   min?: number;
 }
 
+export interface SectionAttributes {
+  description?: string;
+  title?: string;
+}
+
 export interface SectionDefinition {
-  attributes: TitledAttributes;
+  attributes: SectionAttributes;
   fields: AnyFieldDefinition[];
   id: string;
 }
@@ -149,8 +144,15 @@ export interface SliderFieldAttributes extends BaseFieldAttributes {
   step?: number;
 }
 
+export interface StepAttributes {
+  description?: string;
+  nextLabel?: string;
+  previousLabel?: string;
+  title?: string;
+}
+
 export interface StepDefinition {
-  attributes: TitledAttributes;
+  attributes: StepAttributes;
   id: string;
   sections: SectionDefinition[];
 }
@@ -166,11 +168,6 @@ export interface TextFieldAttributes extends BaseFieldAttributes {
   maxLength?: number;
   minLength?: number;
   pattern?: string;
-}
-
-export interface TitledAttributes {
-  description?: string;
-  title?: string;
 }
 
 export interface UrlFieldAttributes extends BaseFieldAttributes {

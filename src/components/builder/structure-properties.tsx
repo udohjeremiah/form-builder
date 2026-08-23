@@ -1,6 +1,9 @@
 "use client";
 
-import type { TitledAttributes } from "@/types/form-definition";
+import type {
+  SectionAttributes,
+  StepAttributes,
+} from "@/types/form-definition";
 
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -9,11 +12,15 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/cn";
 
-export interface StructureNode {
-  attributes: TitledAttributes;
-  id: string;
-  kind: "section" | "step";
-}
+export type StructureNode =
+  | { attributes: SectionAttributes; id: string; kind: "section" }
+  | {
+      attributes: StepAttributes;
+      id: string;
+      index: number;
+      kind: "step";
+      stepCount: number;
+    };
 
 export function StructureProperties({
   fullWidth,
@@ -22,8 +29,12 @@ export function StructureProperties({
 }: {
   fullWidth?: boolean;
   node: StructureNode;
-  onChange: (id: string, patch: TitledAttributes) => void;
+  onChange: (id: string, patch: SectionAttributes | StepAttributes) => void;
 }) {
+  // Navigation labels only make sense from a step's position: the first step
+  // has no back button, and the last one submits instead of advancing.
+  const isLastStep = node.kind === "step" && node.index === node.stepCount - 1;
+
   return (
     <div
       className={cn(
@@ -80,6 +91,53 @@ export function StructureProperties({
             value={node.attributes.description ?? ""}
           />
         </div>
+
+        {node.kind === "step" && (
+          <>
+            {node.index > 0 && (
+              <div className="space-y-1">
+                <Label className="text-[11px] font-medium text-muted-foreground/70">
+                  Previous label
+                </Label>
+                <Input
+                  className="h-8 text-[13px]"
+                  onChange={(event) => {
+                    onChange(node.id, {
+                      ...node.attributes,
+                      previousLabel:
+                        event.target.value === ""
+                          ? undefined
+                          : event.target.value,
+                    });
+                  }}
+                  placeholder="Back button text..."
+                  value={node.attributes.previousLabel ?? ""}
+                />
+              </div>
+            )}
+            <div className="space-y-1">
+              <Label className="text-[11px] font-medium text-muted-foreground/70">
+                {isLastStep ? "Submit label" : "Next label"}
+              </Label>
+              <Input
+                className="h-8 text-[13px]"
+                onChange={(event) => {
+                  onChange(node.id, {
+                    ...node.attributes,
+                    nextLabel:
+                      event.target.value === ""
+                        ? undefined
+                        : event.target.value,
+                  });
+                }}
+                placeholder={
+                  isLastStep ? "Submit button text..." : "Next button text..."
+                }
+                value={node.attributes.nextLabel ?? ""}
+              />
+            </div>
+          </>
+        )}
 
         <Separator className="my-1" />
 

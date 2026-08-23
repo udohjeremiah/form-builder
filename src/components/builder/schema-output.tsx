@@ -7,23 +7,17 @@ import type { FormDefinition } from "@/types/form-definition";
 
 import { getAllFields } from "@/lib/form-definition";
 
-const generateJSON = (definition: FormDefinition): string => {
-  const exportable: FormDefinition = {
-    attributes: {
-      autosave: definition.attributes.autosave ?? true,
-      ...(definition.attributes.description
-        ? { description: definition.attributes.description }
-        : {}),
-      multiStep: !!definition.attributes.multiStep,
-      name: definition.attributes.name ?? "My Form",
-      submitLabel: definition.attributes.submitLabel ?? "Submit",
+const generateJSON = (definition: FormDefinition): string =>
+  JSON.stringify(
+    {
+      id: definition.id,
+      version: definition.version,
+      // eslint-disable-next-line perfectionist/sort-objects -- member order is part of the emitted schema contract
+      steps: definition.steps,
     },
-    id: definition.id,
-    steps: definition.steps,
-    version: definition.version,
-  };
-  return JSON.stringify(exportable, null, 2);
-};
+    null,
+    2,
+  );
 
 export function SchemaOutput({ definition }: { definition: FormDefinition }) {
   const [copied, setCopied] = useState(false);

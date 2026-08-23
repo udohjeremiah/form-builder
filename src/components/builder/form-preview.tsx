@@ -501,8 +501,9 @@ const ProgressBar = ({
 );
 
 export function FormPreview({ definition }: { definition: FormDefinition }) {
-  const multiStepEnabled = !!definition.attributes.multiStep;
   const steps = definition.steps;
+  // Multi-step is derived from the model, matching the canvas.
+  const multiStepEnabled = steps.length > 1;
 
   const [currentStep, setCurrentStep] = useState(0);
   const [values, setValues] = useState<Record<string, string>>({});
@@ -518,6 +519,7 @@ export function FormPreview({ definition }: { definition: FormDefinition }) {
 
   const visibleGroups = renderedSections
     .map((section) => ({
+      attributes: section.attributes,
       fields: section.fields.filter((f) => isFieldVisible(f, values)),
       id: section.id,
     }))
@@ -580,7 +582,7 @@ export function FormPreview({ definition }: { definition: FormDefinition }) {
   };
 
   const handleNext = () => {
-    if (validateStep() && multiStepEnabled && !isLastStep) {
+    if (validateStep() && !isLastStep) {
       setCurrentStep((s) => s + 1);
     }
   };
@@ -633,9 +635,27 @@ export function FormPreview({ definition }: { definition: FormDefinition }) {
                   No fields in this step yet
                 </p>
               ) : (
-                visibleGroups.map((group, groupIndex) => (
-                  <Fragment key={group.id}>
-                    {groupIndex > 0 && <Separator className="my-6" />}
+                visibleGroups.map((group, groupIndex) => {
+                  const showHeader =
+                    group.attributes.title !== undefined ||
+                    group.attributes.description !== undefined;
+                  return (
+                    <Fragment key={group.id}>
+                      {groupIndex > 0 && <Separator className="my-6" />}
+                      {showHeader && (
+                        <div>
+                          {group.attributes.title && (
+                            <h5 className="text-[13px] font-semibold text-foreground">
+                              {group.attributes.title}
+                            </h5>
+                          )}
+                          {group.attributes.description && (
+                            <p className="mt-0.5 text-xs text-muted-foreground">
+                              {group.attributes.description}
+                            </p>
+                          )}
+                        </div>
+                      )}
                     {group.fields.map((field, fieldIndex) => {
                       const fieldError = errors[field.id];
                       const fieldTouched = touched[field.id];
@@ -693,13 +713,14 @@ export function FormPreview({ definition }: { definition: FormDefinition }) {
                         </div>
                       );
                     })}
-                  </Fragment>
-                ))
+                    </Fragment>
+                  );
+                })
               )}
             </div>
 
             <div className="mt-8 flex gap-3">
-              {multiStepEnabled && !isFirstStep && (
+              {!isFirstStep && (
                 <Button
                   className="gap-1.5"
                   onClick={() => {
@@ -708,19 +729,20 @@ export function FormPreview({ definition }: { definition: FormDefinition }) {
                   variant="outline"
                 >
                   <ChevronLeftIcon className="size-3.5" />
-                  Back
+                  {steps[currentStep]?.attributes.previousLabel ?? "Back"}
                 </Button>
               )}
               <Button
                 className="flex-1 gap-1.5 shadow-glow transition-shadow hover:shadow-glow-strong"
                 onClick={handleNext}
               >
-                {multiStepEnabled && !isLastStep ? (
-                  <>
-                    Next <ChevronRightIcon className="size-3.5" />
-                  </>
+                {isLastStep ? (
+                  (steps[currentStep]?.attributes.nextLabel ?? "Submit")
                 ) : (
-                  (definition.attributes.submitLabel ?? "Submit")
+                  <>
+                    {steps[currentStep]?.attributes.nextLabel ?? "Next"}{" "}
+                    <ChevronRightIcon className="size-3.5" />
+                  </>
                 )}
               </Button>
             </div>

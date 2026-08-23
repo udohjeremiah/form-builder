@@ -23,7 +23,8 @@ import type {
   FieldType,
   FormDefinition,
   PersistedFormDefinition,
-  TitledAttributes,
+  SectionAttributes,
+  StepAttributes,
 } from "@/types/form-definition";
 
 import { FieldPalette } from "@/components/builder/field-palette";
@@ -48,14 +49,14 @@ import {
   getField,
   moveField,
   moveFieldIntoSection,
+  moveSection,
+  moveStep,
   newField,
   normalizePersisted,
   removeField,
   removeSection,
   removeStep,
   resetIdCounters,
-  setMultiStep,
-  setSections,
   syncIdCounters,
   updateField,
   updateSectionAttributes,
@@ -110,8 +111,9 @@ export default function BuilderPage() {
     undo,
   } = useUndoRedo<FormDefinition>(initialDefinition);
 
-  const multiStepEnabled = !!formState.attributes.multiStep;
-  const sectionsEnabled = !!formState.attributes.sections;
+  // Multi-step is derived: a form is stepped exactly when it has more than
+  // one step, so single-step forms never surface step chrome.
+  const multiStepEnabled = formState.steps.length > 1;
   const steps = formState.steps;
 
   const [activeStepIndex, setActiveStepIndex] = useState(0);
@@ -213,9 +215,18 @@ export default function BuilderPage() {
   const selectedNode: null | StructureNode = (() => {
     if (!selection || selection.kind === "field") return null;
     if (selection.kind === "step") {
-      const step = steps.find((candidate) => candidate.id === selection.id);
+      const index = steps.findIndex(
+        (candidate) => candidate.id === selection.id,
+      );
+      const step = steps[index];
       return step
-        ? { attributes: step.attributes, id: step.id, kind: "step" }
+        ? {
+            attributes: step.attributes,
+            id: step.id,
+            index,
+            kind: "step",
+            stepCount: steps.length,
+          }
         : null;
     }
     for (const step of steps) {
@@ -424,8 +435,32 @@ export default function BuilderPage() {
     [selection, setFormState, steps],
   );
 
+  const handleMoveStep = useCallback(
+    (fromIndex: number, toIndex: number) => {
+      setFormState((previous) => moveStep(previous, fromIndex, toIndex));
+      // Keep editing the same step after it lands in its new position.
+      setActiveStepIndex((previous) => {
+        if (fromIndex === previous)
+          return Math.min(Math.max(toIndex, 0), steps.length - 1);
+        if (fromIndex < previous && toIndex >= previous) return previous - 1;
+        if (fromIndex > previous && toIndex <= previous) return previous + 1;
+        return previous;
+      });
+    },
+    [setFormState, steps.length],
+  );
+
+  const handleMoveSection = useCallback(
+    (stepIndex: number, fromIndex: number, toIndex: number) => {
+      setFormState((previous) =>
+        moveSection(previous, stepIndex, fromIndex, toIndex),
+      );
+    },
+    [setFormState],
+  );
+
   const handleStructureChange = useCallback(
-    (_id: string, patch: TitledAttributes) => {
+    (_id: string, patch: SectionAttributes | StepAttributes) => {
       if (!selection || selection.kind === "field") return;
       const { id, kind } = selection;
       setFormState((previous) =>
@@ -436,34 +471,6 @@ export default function BuilderPage() {
     },
     [selection, setFormState],
   );
-
-  const toggleMultiStep = useCallback(() => {
-    setFormState((previous) =>
-      setMultiStep(previous, !previous.attributes.multiStep),
-    );
-    setActiveStepIndex(0);
-    setSelection(null);
-  }, [setFormState]);
-
-  const toggleSections = useCallback(() => {
-    const enabling = !formState.attributes.sections;
-    setFormState((previous) =>
-      setSections(previous, !previous.attributes.sections),
-    );
-    if (!enabling) {
-      if (selection?.kind === "section") setSelection(null);
-      return;
-    }
-    // Mirrors the Steps toggle: switching sections on guarantees the active
-    // step has a section to group its fields.
-    const step = formState.steps[activeStepIndex];
-    if (step?.sections.length === 0) {
-      const next = addSection(formState, activeStepIndex);
-      setFormState(next);
-      const created = next.steps[activeStepIndex]?.sections.at(-1);
-      if (created) selectSection(created.id);
-    }
-  }, [activeStepIndex, formState, selectSection, selection, setFormState]);
 
   const handleClearDraft = useCallback(() => {
     localStorage.removeItem(STORAGE_KEY);
@@ -605,29 +612,11 @@ export default function BuilderPage() {
           <Separator className="hidden h-4 sm:block" orientation="vertical" />
 
           <button
-            className={cn(
-              "flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-medium transition-all md:px-2.5",
-              multiStepEnabled
-                ? "bg-primary/10 text-primary"
-                : "text-muted-foreground/60 hover:bg-accent hover:text-foreground",
-            )}
-            onClick={toggleMultiStep}
+            className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-medium text-muted-foreground/60 transition-all hover:bg-accent hover:text-foreground md:px-2.5"
+            onClick={handleAddStep}
           >
             <ListOrderedIcon className="size-3.5" />
-            <span className="hidden sm:inline">Steps</span>
-          </button>
-
-          <button
-            className={cn(
-              "flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-medium transition-all md:px-2.5",
-              sectionsEnabled
-                ? "bg-primary/10 text-primary"
-                : "text-muted-foreground/60 hover:bg-accent hover:text-foreground",
-            )}
-            onClick={toggleSections}
-          >
-            <Columns3Icon className="size-3.5" />
-            <span className="hidden sm:inline">Sections</span>
+            <span className="hidden sm:inline">Add step</span>
           </button>
 
           {/* Desktop-only: Preview/Schema toggle */}
@@ -687,10 +676,11 @@ export default function BuilderPage() {
                 <DragDropProvider onDragEnd={handleDragEnd}>
                   <FormCanvas
                     activeStepIndex={activeStepIndex}
-                    multiStepEnabled={multiStepEnabled}
                     onAddSection={handleAddSection}
                     onAddStep={handleAddStep}
                     onDuplicate={handleDuplicate}
+                    onMoveSection={handleMoveSection}
+                    onMoveStep={handleMoveStep}
                     onRemove={handleRemove}
                     onRemoveSection={handleRemoveSection}
                     onRemoveStep={handleRemoveStep}
@@ -699,7 +689,6 @@ export default function BuilderPage() {
                     onSelectStep={selectStep}
                     onStepChange={setActiveStepIndex}
                     sections={renderedSections}
-                    sectionsEnabled={sectionsEnabled}
                     selectedId={
                       selection?.kind === "field" ? selection.id : null
                     }
@@ -800,10 +789,11 @@ export default function BuilderPage() {
             <FieldPalette />
             <FormCanvas
               activeStepIndex={activeStepIndex}
-              multiStepEnabled={multiStepEnabled}
               onAddSection={handleAddSection}
               onAddStep={handleAddStep}
               onDuplicate={handleDuplicate}
+              onMoveSection={handleMoveSection}
+              onMoveStep={handleMoveStep}
               onRemove={handleRemove}
               onRemoveSection={handleRemoveSection}
               onRemoveStep={handleRemoveStep}
@@ -812,7 +802,6 @@ export default function BuilderPage() {
               onSelectStep={selectStep}
               onStepChange={setActiveStepIndex}
               sections={renderedSections}
-              sectionsEnabled={sectionsEnabled}
               selectedId={selection?.kind === "field" ? selection.id : null}
               selectedSectionId={
                 selection?.kind === "section" ? selection.id : null
