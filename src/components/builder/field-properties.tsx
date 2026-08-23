@@ -1,8 +1,13 @@
 "use client";
 
-import { EyeIcon } from "lucide-react";
+import { EyeIcon, XIcon } from "lucide-react";
 
-import type { AnyFieldDefinition } from "@/types/form-definition";
+import type {
+  AnyFieldDefinition,
+  ConditionGroup,
+  FieldCondition,
+  FieldConditions,
+} from "@/types/form-definition";
 
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -18,7 +23,25 @@ import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/cn";
-import { CONDITION_OPERATORS, getFieldEntry } from "@/lib/field-registry";
+import {
+  CONDITION_OPERATOR_LABELS,
+  getFieldEntry,
+  getOperatorsForType,
+} from "@/lib/field-registry";
+
+type EffectKey = keyof FieldConditions;
+
+const CONDITION_EFFECTS: { label: string; value: EffectKey }[] = [
+  { label: "Show field", value: "show" },
+  { label: "Hide field", value: "hide" },
+  { label: "Disable field", value: "disable" },
+];
+
+const NEW_CONDITION: FieldCondition = {
+  fieldId: "",
+  operator: "not_empty",
+  value: "",
+};
 
 const parseNumberInput = (raw: string): number | undefined => {
   if (raw.trim() === "") return undefined;
@@ -129,6 +152,49 @@ export function FieldProperties({
         ...field.attributes,
         [key]: value,
       },
+    }));
+  };
+
+  // The active effect is whichever key currently holds a group; `show` wins
+  // ties so newly enabled conditioning lands on the familiar effect.
+  const activeEffect =
+    CONDITION_EFFECTS.find((effect) => field.conditions[effect.value])?.value ??
+    "show";
+  const activeGroup: ConditionGroup | undefined =
+    field.conditions[activeEffect];
+  const hasConditions = CONDITION_EFFECTS.some(
+    (effect) => !!field.conditions[effect.value],
+  );
+
+  const setConditions = (conditions: FieldConditions) => {
+    onChange(field.id, () => ({ ...field, conditions }));
+  };
+
+  const updateGroup = (
+    transform: (group: ConditionGroup) => ConditionGroup,
+  ) => {
+    if (!activeGroup) return;
+    setConditions({
+      ...field.conditions,
+      [activeEffect]: transform(activeGroup),
+    });
+  };
+
+  const updateCondition = (index: number, patch: Partial<FieldCondition>) => {
+    updateGroup((group) => ({
+      ...group,
+      conditions: group.conditions.map((condition, conditionIndex) =>
+        conditionIndex === index ? { ...condition, ...patch } : condition,
+      ),
+    }));
+  };
+
+  const removeCondition = (index: number) => {
+    updateGroup((group) => ({
+      ...group,
+      conditions: group.conditions.filter(
+        (_, conditionIndex) => conditionIndex !== index,
+      ),
     }));
   };
 
@@ -301,13 +367,13 @@ export function FieldProperties({
 
         <Separator className="my-1" />
 
-        {/* Conditional Visibility */}
+        {/* Conditional behavior */}
         <div>
           <div className="mb-2 flex items-center justify-between">
             <span className="text-[11px] font-semibold tracking-widest text-muted-foreground/60 uppercase">
-              Visibility
+              Behavior
             </span>
-            {field.conditions.show?.fieldId && (
+            {hasConditions && (
               <Badge
                 className="border-0 bg-accent/20 font-mono text-[9px] text-accent"
                 variant="secondary"
@@ -320,121 +386,214 @@ export function FieldProperties({
           <div className="mb-2 flex items-center justify-between py-1">
             <Label className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground/70">
               <EyeIcon className="size-3" />
-              Show conditionally
+              Conditionally
             </Label>
             <Switch
-              checked={!!field.conditions.show}
+              checked={!!activeGroup}
               onCheckedChange={(checked) => {
-                onChange(field.id, () => ({
-                  ...field,
-                  conditions: {
+                if (checked) {
+                  setConditions({
                     ...field.conditions,
-                    show: checked
-                      ? { fieldId: "", operator: "not_empty", value: "" }
-                      : undefined,
-                  },
-                }));
+                    [activeEffect]: {
+                      combinator: "all",
+                      conditions: [{ ...NEW_CONDITION }],
+                    },
+                  });
+                  return;
+                }
+                // Disabling conditioning clears every effect.
+                setConditions({});
               }}
             />
           </div>
 
-          {!!field.conditions.show && (
-            <div className="space-y-2 rounded-lg border border-border/60 bg-muted/50 p-2.5">
-              <div className="space-y-1">
+          {!!activeGroup && (
+            <>
+              <div className="mb-2 space-y-1">
                 <Label className="text-[10px] font-medium text-muted-foreground/60">
-                  When field
+                  Effect
                 </Label>
                 <Select
                   onValueChange={(v) => {
-                    const current = field.conditions.show;
-                    if (!current || !v) return;
-                    onChange(field.id, () => ({
-                      ...field,
-                      conditions: {
-                        ...field.conditions,
-                        show: { ...current, fieldId: v },
-                      },
-                    }));
+                    if (!v || v === activeEffect) return;
+                    const { [activeEffect]: moved, ...rest } = field.conditions;
+                    setConditions(moved ? { ...rest, [v]: moved } : rest);
                   }}
-                  value={field.conditions.show.fieldId}
-                >
-                  <SelectTrigger className="h-7 text-xs">
-                    <SelectValue placeholder="Select a field..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {allFields
-                      ?.filter((f) => f.id !== field.id)
-                      .map((f) => (
-                        <SelectItem className="text-xs" key={f.id} value={f.id}>
-                          {f.attributes.label}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1">
-                <Label className="text-[10px] font-medium text-muted-foreground/60">
-                  Operator
-                </Label>
-                <Select
-                  onValueChange={(v) => {
-                    const current = field.conditions.show;
-                    if (!current || !v) return;
-                    onChange(field.id, () => ({
-                      ...field,
-                      conditions: {
-                        ...field.conditions,
-                        show: { ...current, operator: v },
-                      },
-                    }));
-                  }}
-                  value={field.conditions.show.operator}
+                  value={activeEffect}
                 >
                   <SelectTrigger className="h-7 text-xs">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {CONDITION_OPERATORS.map((op) => (
+                    {CONDITION_EFFECTS.map((effect) => (
                       <SelectItem
                         className="text-xs"
-                        key={op.value}
-                        value={op.value}
+                        key={effect.value}
+                        value={effect.value}
                       >
-                        {op.label}
+                        {effect.label}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
 
-              {!["empty", "not_empty"].includes(
-                field.conditions.show.operator,
-              ) && (
+              <div className="space-y-2 rounded-lg border border-border/60 bg-muted/50 p-2.5">
                 <div className="space-y-1">
                   <Label className="text-[10px] font-medium text-muted-foreground/60">
-                    Value
+                    Match
                   </Label>
-                  <Input
-                    className="h-7 font-mono text-xs"
-                    onChange={(event) => {
-                      const current = field.conditions.show;
-                      if (!current) return;
-                      const value = event.target.value;
-                      onChange(field.id, () => ({
-                        ...field,
-                        conditions: {
-                          ...field.conditions,
-                          show: { ...current, value },
-                        },
-                      }));
+                  <Select
+                    onValueChange={(v) => {
+                      if (!v) return;
+                      const combinator = v;
+                      updateGroup((group) => ({ ...group, combinator }));
                     }}
-                    placeholder="Expected value..."
-                    value={field.conditions.show.value ?? ""}
-                  />
+                    value={activeGroup.combinator}
+                  >
+                    <SelectTrigger className="h-7 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem className="text-xs" value="all">
+                        All conditions
+                      </SelectItem>
+                      <SelectItem className="text-xs" value="any">
+                        Any condition
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-              )}
-            </div>
+
+                {activeGroup.conditions.map((condition, index) => {
+                  const targetField = allFields?.find(
+                    (f) => f.id === condition.fieldId,
+                  );
+                  // Until a target field is chosen, offer the broadest
+                  // (text-like) operator set.
+                  const operators = getOperatorsForType(
+                    targetField?.type ?? "text",
+                  );
+
+                  return (
+                    <div key={index}>
+                      {index > 0 && (
+                        <div className="flex items-center gap-2 py-1.5">
+                          <span className="h-px flex-1 bg-border/70" />
+                          <span className="rounded-full bg-muted px-2 py-0.5 font-mono text-[9px] tracking-wide text-muted-foreground/60 uppercase">
+                            {activeGroup.combinator === "any" ? "or" : "and"}
+                          </span>
+                          <span className="h-px flex-1 bg-border/70" />
+                        </div>
+                      )}
+
+                      <div className="space-y-1.5 rounded-md border border-border/50 bg-background/60 p-2">
+                        <div className="flex items-center gap-1.5">
+                          <Select
+                            onValueChange={(v) => {
+                              if (!v) return;
+                              const next: Partial<FieldCondition> = {
+                                fieldId: v,
+                              };
+                              const target = allFields?.find((f) => f.id === v);
+                              if (
+                                target &&
+                                !getOperatorsForType(target.type).includes(
+                                  condition.operator,
+                                )
+                              ) {
+                                next.operator = getOperatorsForType(
+                                  target.type,
+                                )[0];
+                              }
+                              updateCondition(index, next);
+                            }}
+                            value={condition.fieldId}
+                          >
+                            <SelectTrigger className="h-7 flex-1 text-xs">
+                              <SelectValue placeholder="Select a field..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {allFields
+                                ?.filter((f) => f.id !== field.id)
+                                .map((f) => (
+                                  <SelectItem
+                                    className="text-xs"
+                                    key={f.id}
+                                    value={f.id}
+                                  >
+                                    {f.attributes.label}
+                                  </SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
+                          <button
+                            className="shrink-0 rounded-md p-1 text-muted-foreground/50 transition-colors hover:bg-destructive/10 hover:text-destructive"
+                            onClick={() => {
+                              removeCondition(index);
+                            }}
+                            title="Remove condition"
+                          >
+                            <XIcon className="size-3" />
+                          </button>
+                        </div>
+
+                        <Select
+                          onValueChange={(v) => {
+                            if (!v) return;
+                            updateCondition(index, { operator: v });
+                          }}
+                          value={condition.operator}
+                        >
+                          <SelectTrigger className="h-7 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {operators.map((operator) => (
+                              <SelectItem
+                                className="text-xs"
+                                key={operator}
+                                value={operator}
+                              >
+                                {CONDITION_OPERATOR_LABELS[operator]}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+
+                        {!["empty", "not_empty"].includes(
+                          condition.operator,
+                        ) && (
+                          <Input
+                            className="h-7 font-mono text-xs"
+                            onChange={(event) => {
+                              updateCondition(index, {
+                                value: event.target.value,
+                              });
+                            }}
+                            placeholder="Expected value..."
+                            value={condition.value ?? ""}
+                          />
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                <button
+                  className="w-full rounded-md border border-dashed border-border/60 py-1.5 text-[11px] font-medium text-muted-foreground/50 transition-colors hover:border-primary/40 hover:text-primary"
+                  onClick={() => {
+                    updateGroup((group) => ({
+                      ...group,
+                      conditions: [...group.conditions, { ...NEW_CONDITION }],
+                    }));
+                  }}
+                  type="button"
+                >
+                  + Add condition
+                </button>
+              </div>
+            </>
           )}
         </div>
 

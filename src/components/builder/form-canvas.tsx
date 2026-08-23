@@ -72,24 +72,19 @@ const SectionCard = ({
     <div
       className={cn(
         "overflow-hidden rounded-xl border",
-        isSelected
-          ? "border-primary/40 shadow-[0_0_0_1px_hsl(217_91%_60%/0.12)]"
-          : "border-border/70",
+        isSelected ? "border-primary/40 shadow-sm" : "border-border/70",
       )}
       onClick={() => {
         onSelectSection(entry.section.id);
       }}
     >
-      <button
-        className={cn(
-          "group/header flex w-full cursor-pointer items-center gap-1.5 border-b border-dashed border-border/60 px-3 py-2 text-left text-xs font-medium transition-colors",
-          isSelected ? "bg-primary/6" : "bg-muted/40 hover:bg-accent",
-        )}
+      <Button
+        className="group/header w-full rounded-none border-0 border-b border-dashed border-border"
         onClick={(event) => {
           event.stopPropagation();
           onSelectSection(entry.section.id);
         }}
-        type="button"
+        variant={isSelected ? "secondary" : "ghost"}
       >
         <span
           className={cn(
@@ -143,7 +138,7 @@ const SectionCard = ({
             <XIcon className="size-3" />
           </span>
         )}
-      </button>
+      </Button>
 
       <div
         className={cn(
@@ -223,9 +218,9 @@ const SortableField = ({
           {field.attributes.required && (
             <span className="size-1 shrink-0 rounded-full bg-primary" />
           )}
-          {field.conditions.show?.fieldId && (
-            <EyeIcon className="size-3 shrink-0 text-accent/60" />
-          )}
+          {(["disable", "hide", "show"] as const).some(
+            (key) => field.conditions[key]?.conditions.length,
+          ) && <EyeIcon className="size-3 shrink-0 text-accent/60" />}
         </div>
       </div>
 
@@ -442,66 +437,67 @@ export function FormCanvas({
       {/* Step tabs; a single step stays selectable through its quiet chip */}
       <div className="flex items-center gap-1 overflow-x-auto border-b border-border bg-background px-3 py-1.5">
         {steps.map((step, index) => (
-          <div className="flex shrink-0 items-center" key={step.id}>
-            <button
+          <Button
+            className="group max-w-44 min-w-0"
+            key={step.id}
+            onClick={() => {
+              onStepChange(index);
+              onSelectStep(step.id);
+            }}
+            variant={activeStepIndex === index ? "secondary" : "outline"}
+          >
+            <span
               className={cn(
-                "group flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium whitespace-nowrap transition-all",
+                "flex size-5 shrink-0 items-center justify-center rounded-full border text-[10px] font-bold",
                 activeStepIndex === index
-                  ? "bg-primary/10 text-primary"
-                  : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                  ? "border-primary/40 bg-primary/10"
+                  : "border-border",
               )}
-              onClick={() => {
-                onStepChange(index);
-                onSelectStep(step.id);
-              }}
-              type="button"
             >
-              <span
-                className={cn(
-                  "flex size-5 items-center justify-center rounded-full border text-[10px] font-bold",
-                  activeStepIndex === index
-                    ? "border-primary/40 bg-primary/10"
-                    : "border-border",
-                )}
-              >
-                {index + 1}
-              </span>
+              {index + 1}
+            </span>
+            <span
+              className={cn(
+                "min-w-0 truncate",
+                !step.attributes.title && "text-muted-foreground/40 italic",
+              )}
+            >
               {step.attributes.title ?? `Step ${index + 1}`}
-              {index > 0 && multiStepEnabled && (
-                <span
-                  className="ml-0.5 opacity-0 transition-all group-hover:opacity-100 hover:text-foreground"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onMoveStep(index, index - 1);
-                  }}
-                >
-                  <ChevronLeftIcon className="size-3" />
-                </span>
-              )}
-              {index < steps.length - 1 && multiStepEnabled && (
-                <span
-                  className="ml-0.5 opacity-0 transition-all group-hover:opacity-100 hover:text-foreground"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onMoveStep(index, index + 1);
-                  }}
-                >
-                  <ChevronRightIcon className="size-3" />
-                </span>
-              )}
-              {multiStepEnabled && (
-                <span
-                  className="ml-0.5 opacity-0 transition-all group-hover:opacity-100 hover:text-destructive"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onRemoveStep(index);
-                  }}
-                >
-                  <XIcon className="size-3" />
-                </span>
-              )}
-            </button>
-          </div>
+            </span>
+            {index > 0 && multiStepEnabled && (
+              <span
+                className="shrink-0 opacity-0 transition-all group-hover:opacity-100 hover:text-foreground"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onMoveStep(index, index - 1);
+                }}
+              >
+                <ChevronLeftIcon className="size-3" />
+              </span>
+            )}
+            {index < steps.length - 1 && multiStepEnabled && (
+              <span
+                className="shrink-0 opacity-0 transition-all group-hover:opacity-100 hover:text-foreground"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onMoveStep(index, index + 1);
+                }}
+              >
+                <ChevronRightIcon className="size-3" />
+              </span>
+            )}
+            {multiStepEnabled && (
+              <span
+                className="ml-0.5 shrink-0 opacity-0 transition-all group-hover:opacity-100 hover:text-destructive"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onRemoveStep(index);
+                }}
+              >
+                <XIcon className="size-3" />
+              </span>
+            )}
+          </Button>
         ))}
         <Button
           className="size-7 shrink-0 text-muted-foreground/40 hover:text-primary"

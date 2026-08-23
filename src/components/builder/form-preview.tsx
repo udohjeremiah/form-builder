@@ -43,11 +43,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/cn";
 import {
   getAllFields,
+  isFieldDisabled,
   isFieldVisible,
   validateFieldValue,
 } from "@/lib/form-definition";
 
 const FieldInput = ({
+  disabled,
   error,
   field,
   onBlur,
@@ -55,6 +57,7 @@ const FieldInput = ({
   touched,
   value,
 }: {
+  disabled: boolean;
   error: null | string;
   field: AnyFieldDefinition;
   onBlur: () => void;
@@ -73,6 +76,7 @@ const FieldInput = ({
         <div className="flex items-center gap-3">
           <Checkbox
             checked={value === "true"}
+            disabled={disabled}
             id={field.id}
             onCheckedChange={(checked) => {
               onChange(String(checked));
@@ -80,7 +84,10 @@ const FieldInput = ({
             }}
           />
           <Label
-            className="cursor-pointer text-sm font-normal text-foreground"
+            className={cn(
+              "text-sm font-normal text-foreground",
+              disabled ? "cursor-default opacity-60" : "cursor-pointer",
+            )}
             htmlFor={field.id}
           >
             {field.attributes.placeholder ?? field.attributes.label}
@@ -98,6 +105,7 @@ const FieldInput = ({
           >
             <input
               className="size-full cursor-pointer opacity-0"
+              disabled={disabled}
               onChange={(event) => {
                 onChange(event.target.value);
                 onBlur();
@@ -108,6 +116,7 @@ const FieldInput = ({
           </div>
           <Input
             className={cn("flex-1 font-mono text-xs", errorClass)}
+            disabled={disabled}
             onBlur={onBlur}
             onChange={(event) => {
               onChange(event.target.value);
@@ -131,6 +140,7 @@ const FieldInput = ({
                   !dateValue && "text-muted-foreground",
                   hasError && "border-destructive/60",
                 )}
+                disabled={disabled}
                 variant="outline"
               />
             }
@@ -161,6 +171,7 @@ const FieldInput = ({
       return (
         <Input
           className={errorClass}
+          disabled={disabled}
           onBlur={onBlur}
           onChange={(event) => {
             onChange(event.target.value);
@@ -179,6 +190,7 @@ const FieldInput = ({
         <Input
           autoComplete={autoComplete}
           className={errorClass}
+          disabled={disabled}
           maxLength={maxLength}
           onBlur={onBlur}
           onChange={(event) => {
@@ -195,7 +207,10 @@ const FieldInput = ({
       return (
         <div
           className={cn(
-            "cursor-pointer rounded-lg border-2 border-dashed p-8 text-center transition-colors hover:border-primary/30",
+            "rounded-lg border-2 border-dashed p-8 text-center transition-colors",
+            disabled
+              ? "pointer-events-none border-border opacity-50"
+              : "cursor-pointer hover:border-primary/30",
             hasError
               ? "border-destructive/40 bg-destructive/5"
               : "border-border",
@@ -214,6 +229,7 @@ const FieldInput = ({
       return (
         <Input
           className={errorClass}
+          disabled={disabled}
           max={max}
           min={min}
           onBlur={onBlur}
@@ -232,6 +248,7 @@ const FieldInput = ({
       return (
         <Input
           className={errorClass}
+          disabled={disabled}
           onBlur={onBlur}
           onChange={(event) => {
             onChange(event.target.value);
@@ -246,6 +263,7 @@ const FieldInput = ({
     case "radio": {
       return (
         <RadioGroup
+          disabled={disabled}
           onValueChange={(v: string) => {
             onChange(v);
             onBlur();
@@ -258,7 +276,10 @@ const FieldInput = ({
               <div className="flex items-center gap-3" key={o}>
                 <RadioGroupItem id={`${field.id}-${o}`} value={o} />
                 <Label
-                  className="cursor-pointer text-sm font-normal text-foreground"
+                  className={cn(
+                    "text-sm font-normal text-foreground",
+                    disabled ? "cursor-default opacity-60" : "cursor-pointer",
+                  )}
                   htmlFor={`${field.id}-${o}`}
                 >
                   {o}
@@ -278,6 +299,7 @@ const FieldInput = ({
             (star) => (
               <button
                 className="p-0.5 transition-colors"
+                disabled={disabled}
                 key={star}
                 onClick={() => {
                   onChange(String(star));
@@ -308,6 +330,7 @@ const FieldInput = ({
     case "select": {
       return (
         <Select
+          disabled={disabled}
           onValueChange={(v) => {
             if (!v) return;
             onChange(v);
@@ -344,6 +367,7 @@ const FieldInput = ({
         <div className="space-y-3">
           <Slider
             className="w-full"
+            disabled={disabled}
             max={max}
             min={min}
             onValueChange={(v: number | readonly number[]) => {
@@ -370,6 +394,7 @@ const FieldInput = ({
       return (
         <Textarea
           className={errorClass}
+          disabled={disabled}
           maxLength={field.attributes.maxLength}
           onBlur={onBlur}
           onChange={(event) => {
@@ -386,6 +411,7 @@ const FieldInput = ({
       return (
         <Input
           className={errorClass}
+          disabled={disabled}
           onBlur={onBlur}
           onChange={(event) => {
             onChange(event.target.value);
@@ -401,6 +427,7 @@ const FieldInput = ({
         <div className="flex items-center gap-3">
           <Switch
             checked={value === "true"}
+            disabled={disabled}
             id={field.id}
             onCheckedChange={(checked) => {
               onChange(String(checked));
@@ -408,7 +435,10 @@ const FieldInput = ({
             }}
           />
           <Label
-            className="cursor-pointer text-sm font-normal text-foreground"
+            className={cn(
+              "text-sm font-normal text-foreground",
+              disabled ? "cursor-default opacity-60" : "cursor-pointer",
+            )}
             htmlFor={field.id}
           >
             {field.attributes.placeholder ?? field.attributes.label}
@@ -421,6 +451,7 @@ const FieldInput = ({
       return (
         <Input
           className={errorClass}
+          disabled={disabled}
           onBlur={onBlur}
           onChange={(event) => {
             onChange(event.target.value);
@@ -571,6 +602,8 @@ export function FormPreview({ definition }: { definition: FormDefinition }) {
     const newErrors: Record<string, null | string> = {};
     const newTouched: Record<string, boolean> = {};
     for (const field of visibleFields) {
+      // Disabled fields cannot be filled in, so they must not block submit.
+      if (isFieldDisabled(field, values)) continue;
       newTouched[field.id] = true;
       const error = validateFieldValue(field, values[field.id] ?? "");
       newErrors[field.id] = error;
@@ -660,11 +693,15 @@ export function FormPreview({ definition }: { definition: FormDefinition }) {
                       {group.fields.map((field, fieldIndex) => {
                         const fieldError = errors[field.id];
                         const fieldTouched = touched[field.id];
+                        const fieldDisabled = isFieldDisabled(field, values);
                         const index =
                           (groupOffsets[groupIndex] ?? 0) + fieldIndex;
                         return (
                           <div
-                            className="animate-in space-y-1.5 duration-300 fill-mode-both fade-in slide-in-from-bottom-2"
+                            className={cn(
+                              "animate-in space-y-1.5 duration-300 fill-mode-both fade-in slide-in-from-bottom-2",
+                              fieldDisabled && "opacity-50",
+                            )}
                             key={field.id}
                             style={{ animationDelay: `${index * 50}ms` }}
                           >
@@ -687,6 +724,7 @@ export function FormPreview({ definition }: { definition: FormDefinition }) {
                                 </>
                               )}
                             <FieldInput
+                              disabled={fieldDisabled}
                               error={fieldError ?? null}
                               field={field}
                               onBlur={() => {

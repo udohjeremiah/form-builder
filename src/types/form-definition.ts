@@ -9,8 +9,26 @@ export interface BaseFieldAttributes {
   required?: boolean;
 }
 
+/**
+ * A group of sibling conditions combined with a single combinator. An empty
+ * group is always satisfied.
+ */
+export interface ConditionGroup {
+  combinator: "all" | "any";
+  conditions: FieldCondition[];
+}
+
 export type ConditionOperator =
-  "contains" | "empty" | "equals" | "not_empty" | "not_equals";
+  | "contains"
+  | "empty"
+  | "eq"
+  | "gt"
+  | "gte"
+  | "lt"
+  | "lte"
+  | "neq"
+  | "not_contains"
+  | "not_empty";
 
 export interface EmailFieldAttributes extends BaseFieldAttributes {
   autoComplete?: string;
@@ -50,9 +68,9 @@ export interface FieldCondition {
  * effect applies; an absent key means the effect never applies.
  */
 export interface FieldConditions {
-  disable?: FieldCondition;
-  hide?: FieldCondition;
-  show?: FieldCondition;
+  disable?: ConditionGroup;
+  hide?: ConditionGroup;
+  show?: ConditionGroup;
 }
 
 export interface FieldDefinition<Type extends FieldType = FieldType> {

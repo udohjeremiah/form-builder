@@ -263,16 +263,76 @@ const FIELD_REGISTRY: {
   },
 };
 
-export const CONDITION_OPERATORS: {
-  label: string;
-  value: ConditionOperator;
-}[] = [
-  { label: "Equals", value: "equals" },
-  { label: "Not equals", value: "not_equals" },
-  { label: "Contains", value: "contains" },
-  { label: "Is not empty", value: "not_empty" },
-  { label: "Is empty", value: "empty" },
+export const CONDITION_OPERATOR_LABELS: Readonly<
+  Record<ConditionOperator, string>
+> = {
+  contains: "Contains",
+  empty: "Is empty",
+  eq: "Equals",
+  gt: "Greater than",
+  gte: "Greater than or equal",
+  lt: "Less than",
+  lte: "Less than or equal",
+  neq: "Not equals",
+  not_contains: "Does not contain",
+  not_empty: "Is not empty",
+};
+
+// Operators that make sense for free-text-like values.
+const TEXT_OPERATORS: readonly ConditionOperator[] = [
+  "eq",
+  "neq",
+  "contains",
+  "not_contains",
+  "empty",
+  "not_empty",
 ];
+
+// Ordered values support both equality and magnitude comparisons.
+const COMPARABLE_OPERATORS: readonly ConditionOperator[] = [
+  "eq",
+  "neq",
+  "gt",
+  "gte",
+  "lt",
+  "lte",
+  "empty",
+  "not_empty",
+];
+
+// Discrete choices compare by equality only.
+const CHOICE_OPERATORS: readonly ConditionOperator[] = [
+  "eq",
+  "neq",
+  "empty",
+  "not_empty",
+];
+
+const OPERATORS_BY_FIELD_TYPE: Record<FieldType, readonly ConditionOperator[]> =
+  {
+    checkbox: CHOICE_OPERATORS,
+    color: TEXT_OPERATORS,
+    date: COMPARABLE_OPERATORS,
+    datetime: COMPARABLE_OPERATORS,
+    email: TEXT_OPERATORS,
+    file: TEXT_OPERATORS,
+    number: COMPARABLE_OPERATORS,
+    password: TEXT_OPERATORS,
+    phone: TEXT_OPERATORS,
+    radio: CHOICE_OPERATORS,
+    rating: COMPARABLE_OPERATORS,
+    select: CHOICE_OPERATORS,
+    slider: COMPARABLE_OPERATORS,
+    text: TEXT_OPERATORS,
+    textarea: TEXT_OPERATORS,
+    time: TEXT_OPERATORS,
+    toggle: CHOICE_OPERATORS,
+    url: TEXT_OPERATORS,
+  };
+
+export const getOperatorsForType = (
+  type: FieldType,
+): readonly ConditionOperator[] => OPERATORS_BY_FIELD_TYPE[type];
 
 export const FIELD_TYPE_LIST = Object.values(FIELD_REGISTRY);
 
