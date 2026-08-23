@@ -15,20 +15,57 @@ import {
   Settings2Icon,
   Undo2Icon,
 } from "lucide-react";
-import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import type { FieldType, FormField, FormStep } from "@/types/form";
+import type { StructureNode } from "@/components/builder/structure-properties";
+import type {
+  AnyFieldDefinition,
+  FieldType,
+  FormDefinition,
+  PersistedFormDefinition,
+  TitledAttributes,
+} from "@/types/form-definition";
 
 import { FieldPalette } from "@/components/builder/field-palette";
 import { FieldProperties } from "@/components/builder/field-properties";
 import { FormCanvas } from "@/components/builder/form-canvas";
 import { FormPreview } from "@/components/builder/form-preview";
 import { SchemaOutput } from "@/components/builder/schema-output";
+import { StructureProperties } from "@/components/builder/structure-properties";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "@/components/ui/toast";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useUndoRedo } from "@/hooks/use-undo-redo";
+import { cn } from "@/lib/cn";
+import {
+  addSection,
+  addStep,
+  appendField,
+  appendFieldToSection,
+  createDefaultDefinition,
+  duplicateField,
+  getAllFields,
+  getField,
+  moveField,
+  moveFieldIntoSection,
+  newField,
+  normalizePersisted,
+  removeField,
+  removeSection,
+  removeStep,
+  resetIdCounters,
+  setMultiStep,
+  setSections,
+  syncIdCounters,
+  updateField,
+  updateSectionAttributes,
+  updateStepAttributes,
+} from "@/lib/form-definition";
+
+interface BuilderSelection {
+  id: string;
+  kind: "field" | "section" | "step";
+}
 
 type MobilePanel = "canvas" | "output" | "palette" | "properties";
 type RightPanel = "preview" | "schema";
@@ -36,81 +73,21 @@ type RightPanel = "preview" | "schema";
 const STORAGE_KEY = "form-builder-draft";
 const AUTOSAVE_DELAY = 1500;
 
-interface DraftState extends FormState {
-  savedAt: number;
-}
-
-interface FormState {
-  fields: FormField[];
-  multiStepEnabled: boolean;
-  steps: FormStep[];
-}
-
-let fieldCounter = 0;
-
-const createField = (type: FieldType, step: number): FormField => {
-  fieldCounter++;
-  const labels: Record<FieldType, string> = {
-    checkbox: "Checkbox",
-    color: "Color Picker",
-    date: "Date",
-    datetime: "Date & Time",
-    email: "Email",
-    file: "File Upload",
-    heading: "Section Heading",
-    hidden: "Hidden Field",
-    number: "Number",
-    paragraph: "Description",
-    password: "Password",
-    phone: "Phone",
-    radio: "Radio Group",
-    rating: "Rating",
-    select: "Dropdown",
-    separator: "Divider",
-    slider: "Slider",
-    text: "Text Field",
-    textarea: "Message",
-    time: "Time",
-    toggle: "Toggle",
-    url: "URL",
-  };
-  return {
-    id: `field_${fieldCounter}_${Date.now()}`,
-    label: labels[type] || "Field",
-    options:
-      type === "select" || type === "radio"
-        ? ["Option 1", "Option 2", "Option 3"]
-        : undefined,
-    placeholder: `Enter ${labels[type].toLowerCase()}...`,
-    required: false,
-    step,
-    type,
-  };
-};
-
-let stepCounter = 0;
-const createStep = (): FormStep => {
-  stepCounter++;
-  return {
-    fieldIds: [],
-    id: `step_${stepCounter}_${Date.now()}`,
-    title: `Step ${stepCounter}`,
-  };
-};
-
-const loadDraft = (): DraftState | null => {
+const loadDraft = (): null | PersistedFormDefinition => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
-    const draft = JSON.parse(raw) as DraftState;
-    if (draft.fields.length > 0 || draft.steps.length > 1) return draft;
-    return null;
+    const normalized = normalizePersisted(JSON.parse(raw) as unknown);
+    if (!normalized) return null;
+    if (getAllFields(normalized).length === 0 && normalized.steps.length <= 1)
+      return null;
+    return normalized;
   } catch {
     return null;
   }
 };
 
-const saveDraft = (state: DraftState) => {
+const saveDraft = (state: PersistedFormDefinition) => {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch {
@@ -118,7 +95,7 @@ const saveDraft = (state: DraftState) => {
   }
 };
 
-const defaultStep = createStep();
+const initialDefinition = createDefaultDefinition();
 
 export default function BuilderPage() {
   const isMobile = useIsMobile();
@@ -131,40 +108,33 @@ export default function BuilderPage() {
     set: setFormState,
     state: formState,
     undo,
-  } = useUndoRedo<FormState>({
-    fields: [],
-    multiStepEnabled: false,
-    steps: [defaultStep],
-  });
-  const { fields, multiStepEnabled, steps } = formState;
+  } = useUndoRedo<FormDefinition>(initialDefinition);
+
+  const multiStepEnabled = !!formState.attributes.multiStep;
+  const sectionsEnabled = !!formState.attributes.sections;
+  const steps = formState.steps;
 
   const [activeStepIndex, setActiveStepIndex] = useState(0);
-  const [selectedId, setSelectedId] = useState<null | string>(null);
+  const [selection, setSelection] = useState<BuilderSelection | null>(null);
   const [rightPanel, setRightPanel] = useState<RightPanel>("preview");
-  const [editingStepId, setEditingStepId] = useState<null | string>(null);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saved">("idle");
   const [mobilePanel, setMobilePanel] = useState<MobilePanel>("canvas");
 
   useEffect(() => {
     const initialDraft = loadDraft();
     if (!initialDraft) return;
-    let maxField = fieldCounter;
-    let maxStep = stepCounter;
-    for (const f of initialDraft.fields) {
-      const n = /^field_(\d+)/.exec(f.id);
+    let maxField = 0;
+    let maxStep = 0;
+    for (const field of getAllFields(initialDraft)) {
+      const n = /^field_(\d+)/.exec(field.id);
       if (n?.[1]) maxField = Math.max(maxField, Number.parseInt(n[1], 10));
     }
-    for (const s of initialDraft.steps) {
-      const n = /^step_(\d+)/.exec(s.id);
+    for (const step of initialDraft.steps) {
+      const n = /^step_(\d+)/.exec(step.id);
       if (n?.[1]) maxStep = Math.max(maxStep, Number.parseInt(n[1], 10));
     }
-    fieldCounter = maxField;
-    stepCounter = maxStep;
-    resetHistory({
-      fields: initialDraft.fields,
-      multiStepEnabled: initialDraft.multiStepEnabled,
-      steps: initialDraft.steps,
-    });
+    syncIdCounters({ field: maxField, step: maxStep });
+    resetHistory(initialDraft);
     const ago = Date.now() - initialDraft.savedAt;
     let agoText = "just now";
     if (ago >= 3_600_000) {
@@ -172,8 +142,9 @@ export default function BuilderPage() {
     } else if (ago >= 60_000) {
       agoText = `${Math.floor(ago / 60_000)}m ago`;
     }
+    const fieldTotal = getAllFields(initialDraft).length;
     toast.add({
-      description: `${initialDraft.fields.length} field${initialDraft.fields.length === 1 ? "" : "s"} recovered (${agoText}).`,
+      description: `${fieldTotal} field${fieldTotal === 1 ? "" : "s"} recovered (${agoText}).`,
       title: "Draft restored",
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -217,34 +188,54 @@ export default function BuilderPage() {
     };
   }, [undo, redo]);
 
-  const currentStepFields = multiStepEnabled
-    ? fields.filter((f) => f.step === activeStepIndex)
-    : fields;
-  const selectedField = fields.find((f) => f.id === selectedId) ?? null;
+  const allFields = getAllFields(formState);
 
-  const updateFields = useCallback(
-    (updater: (fields: FormField[]) => FormField[]) => {
-      setFormState((previous) => ({
-        ...previous,
-        fields: updater(previous.fields),
-      }));
-    },
-    [setFormState],
+  // Sections rendered on the canvas: only the active step's when multi-step
+  // is on, otherwise every step's sections flattened in order.
+  const renderedSections = multiStepEnabled
+    ? (formState.steps[activeStepIndex]?.sections ?? []).map((section) => ({
+        section,
+        stepIndex: activeStepIndex,
+      }))
+    : formState.steps.flatMap((step, stepIndex) =>
+        step.sections.map((section) => ({ section, stepIndex })),
+      );
+
+  const renderedFields = renderedSections.flatMap(
+    (entry) => entry.section.fields,
   );
 
-  const updateSteps = useCallback(
-    (updater: (steps: FormStep[]) => FormStep[]) => {
-      setFormState((previous) => ({
-        ...previous,
-        steps: updater(previous.steps),
-      }));
-    },
-    [setFormState],
-  );
+  const selectedField =
+    selection?.kind === "field"
+      ? (getField(formState, selection.id) ?? null)
+      : null;
+
+  const selectedNode: null | StructureNode = (() => {
+    if (!selection || selection.kind === "field") return null;
+    if (selection.kind === "step") {
+      const step = steps.find((candidate) => candidate.id === selection.id);
+      return step
+        ? { attributes: step.attributes, id: step.id, kind: "step" }
+        : null;
+    }
+    for (const step of steps) {
+      const section = step.sections.find(
+        (candidate) => candidate.id === selection.id,
+      );
+      if (section) {
+        return {
+          attributes: section.attributes,
+          id: section.id,
+          kind: "section",
+        };
+      }
+    }
+    return null;
+  })();
 
   const selectField = useCallback(
     (id: null | string) => {
-      setSelectedId(id);
+      setSelection(id ? { id, kind: "field" } : null);
       if (isMobile && id && mobilePanel === "canvas") {
         setMobilePanel("properties");
       }
@@ -252,152 +243,249 @@ export default function BuilderPage() {
     [isMobile, mobilePanel],
   );
 
+  const selectSection = useCallback(
+    (id: string) => {
+      setSelection({ id, kind: "section" });
+      if (isMobile && mobilePanel === "canvas") {
+        setMobilePanel("properties");
+      }
+    },
+    [isMobile, mobilePanel],
+  );
+
+  const selectStep = useCallback((id: string) => {
+    setSelection({ id, kind: "step" });
+  }, []);
+
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
       if (event.canceled) return;
-      const { source } = event.operation;
+      const { source, target } = event.operation;
       if (!source) return;
+
+      const sectionIds = new Set(
+        renderedSections.map((entry) => entry.section.id),
+      );
+      const targetId = target == null ? null : String(target.id);
+      const droppedOnSection =
+        targetId !== null && !isSortable(target) && sectionIds.has(targetId);
+
       if (String(source.id).startsWith("palette-")) {
         const type = source.data["type"] as FieldType | undefined;
-        if (type) {
-          const f = createField(type, activeStepIndex);
-          updateFields((p) => [...p, f]);
-          selectField(f.id);
+        if (!type) return;
+        const field = newField(type);
+        if (targetId !== null && droppedOnSection) {
+          // Palette drop aimed at a specific section body.
+          setFormState((previous) =>
+            appendFieldToSection(previous, targetId, field),
+          );
+        } else {
+          setFormState((previous) =>
+            appendField(previous, activeStepIndex, field),
+          );
         }
+        selectField(field.id);
         return;
       }
       if (!isSortable(source)) return;
+      const fieldId = String(source.id);
+
+      // The optimistic sorting plugin physically reparents the dragged node
+      // next to the hovered target during dragover and leaves it there after
+      // a successful drop. Restore it to its React-managed container first so
+      // the upcoming state commit does not fail on a stale parent
+      // (NotFoundError: Failed to execute 'removeChild').
+      const draggedNode = document.querySelector(
+        `[data-field-id="${CSS.escape(fieldId)}"]`,
+      );
+      const homeEntry = renderedSections.find((entry) =>
+        entry.section.fields.some((field) => field.id === fieldId),
+      );
+      const homeContainer = homeEntry
+        ? document.querySelector(
+            `[data-section-fields="${CSS.escape(homeEntry.section.id)}"]`,
+          )
+        : null;
+      if (
+        draggedNode &&
+        homeContainer &&
+        !homeContainer.contains(draggedNode)
+      ) {
+        homeContainer.append(draggedNode);
+      }
+
+      if (targetId !== null && droppedOnSection) {
+        // Field drop on a section body rather than on another field.
+        setFormState((previous) =>
+          moveFieldIntoSection(previous, fieldId, targetId),
+        );
+        return;
+      }
+
       const { index, initialIndex } = source;
       if (initialIndex === index) return;
-      // Sortable indexes refer to the filtered current-step list; map both
-      // positions back to global field ids before reordering.
-      const fromId = currentStepFields[initialIndex]?.id;
-      const toId = currentStepFields[index]?.id;
+      // Sortable indexes refer to the flattened list of rendered sections;
+      // map both positions back to global field ids before reordering.
+      const fromId = renderedFields[initialIndex]?.id;
+      const toId = renderedFields[index]?.id;
       if (!fromId || !toId || fromId === toId) return;
-      updateFields((previous) => {
-        const oi = previous.findIndex((f) => f.id === fromId);
-        const ni = previous.findIndex((f) => f.id === toId);
-        if (oi === -1 || ni === -1) return previous;
-        const next = [...previous];
-        const [moved] = next.splice(oi, 1);
-        if (!moved) return previous;
-        next.splice(ni, 0, moved);
-        return next;
-      });
+      setFormState((previous) => moveField(previous, fromId, toId));
     },
-    [activeStepIndex, currentStepFields, updateFields, selectField],
+    [
+      activeStepIndex,
+      renderedFields,
+      renderedSections,
+      setFormState,
+      selectField,
+    ],
   );
 
   const handleRemove = useCallback(
     (id: string) => {
-      updateFields((p) => p.filter((f) => f.id !== id));
-      if (selectedId === id) selectField(null);
+      setFormState((previous) => removeField(previous, id));
+      if (selection?.kind === "field" && selection.id === id) {
+        setSelection(null);
+      }
     },
-    [selectedId, updateFields, selectField],
+    [selection, setFormState],
   );
+
+  const handleRemoveSection = useCallback(
+    (id: string) => {
+      const removed = renderedSections.find(
+        (entry) => entry.section.id === id,
+      )?.section;
+      setFormState((previous) => removeSection(previous, id));
+      if (
+        removed &&
+        selection &&
+        (selection.kind === "section"
+          ? selection.id === removed.id
+          : selection.kind === "field" &&
+            removed.fields.some((field) => field.id === selection.id))
+      ) {
+        setSelection(null);
+      }
+    },
+    [renderedSections, selection, setFormState],
+  );
+
   const handleDuplicate = useCallback(
     (id: string) => {
-      updateFields((previous) => {
-        const index = previous.findIndex((f) => f.id === id);
-        if (index === -1) return previous;
-        const source = previous[index];
-        if (!source) return previous;
-        fieldCounter++;
-        const clone = {
-          ...source,
-          id: `field_${fieldCounter}_${Date.now()}`,
-          label: `${source.label} (copy)`,
-        };
-        const next = [...previous];
-        next.splice(index + 1, 0, clone);
-        return next;
-      });
+      setFormState((previous) => duplicateField(previous, id));
     },
-    [updateFields],
+    [setFormState],
   );
+
   const handleFieldChange = useCallback(
-    (id: string, u: Partial<FormField>) => {
-      updateFields((p) => p.map((f) => (f.id === id ? { ...f, ...u } : f)));
+    (
+      id: string,
+      updater: (field: AnyFieldDefinition) => AnyFieldDefinition,
+    ) => {
+      setFormState((previous) => updateField(previous, id, updater));
     },
-    [updateFields],
+    [setFormState],
   );
+
   const handleAddStep = useCallback(() => {
-    const s = createStep();
-    updateSteps((p) => [...p, s]);
+    setFormState(addStep);
     setActiveStepIndex(steps.length);
-  }, [updateSteps, steps.length]);
+    setSelection(null);
+  }, [setFormState, steps.length]);
+
+  const handleAddSection = useCallback(() => {
+    const next = addSection(formState, activeStepIndex);
+    setFormState(next);
+    const created = next.steps[activeStepIndex]?.sections.at(-1);
+    if (!created) return;
+    selectSection(created.id);
+  }, [activeStepIndex, formState, selectSection, setFormState]);
 
   const handleRemoveStep = useCallback(
     (index: number) => {
       if (steps.length <= 1) return;
-      setFormState((previous) => ({
-        ...previous,
-        fields: previous.fields
-          .filter((f) => f.step !== index)
-          .map((f) => ({
-            ...f,
-            step: f.step !== undefined && f.step > index ? f.step - 1 : f.step,
-          })),
-        steps: previous.steps.filter((_, index_) => index_ !== index),
-      }));
-      setActiveStepIndex((p) => Math.min(p, steps.length - 2));
+      const removed = steps[index];
+      setFormState((previous) => removeStep(previous, index));
+      setActiveStepIndex((previous) => Math.min(previous, steps.length - 2));
+      if (
+        removed &&
+        selection &&
+        (selection.kind === "step"
+          ? selection.id === removed.id
+          : removed.sections.some(
+              (section) =>
+                section.id === selection.id ||
+                section.fields.some((field) => field.id === selection.id),
+            ))
+      ) {
+        setSelection(null);
+      }
     },
-    [steps.length, setFormState],
+    [selection, setFormState, steps],
   );
 
-  const handleRenameStep = useCallback(
-    (index: number, t: string) => {
-      updateSteps((p) =>
-        p.map((s, index_) => (index_ === index ? { ...s, title: t } : s)),
+  const handleStructureChange = useCallback(
+    (_id: string, patch: TitledAttributes) => {
+      if (!selection || selection.kind === "field") return;
+      const { id, kind } = selection;
+      setFormState((previous) =>
+        kind === "step"
+          ? updateStepAttributes(previous, id, patch)
+          : updateSectionAttributes(previous, id, patch),
       );
     },
-    [updateSteps],
+    [selection, setFormState],
   );
 
   const toggleMultiStep = useCallback(() => {
-    setFormState((previous) => {
-      const enabled = !previous.multiStepEnabled;
-      return {
-        ...previous,
-        fields: enabled
-          ? previous.fields.map((f) => ({ ...f, step: 0 }))
-          : previous.fields,
-        multiStepEnabled: enabled,
-        steps:
-          enabled && previous.steps.length === 0
-            ? [createStep()]
-            : previous.steps,
-      };
-    });
+    setFormState((previous) =>
+      setMultiStep(previous, !previous.attributes.multiStep),
+    );
     setActiveStepIndex(0);
+    setSelection(null);
   }, [setFormState]);
+
+  const toggleSections = useCallback(() => {
+    const enabling = !formState.attributes.sections;
+    setFormState((previous) =>
+      setSections(previous, !previous.attributes.sections),
+    );
+    if (!enabling) {
+      if (selection?.kind === "section") setSelection(null);
+      return;
+    }
+    // Mirrors the Steps toggle: switching sections on guarantees the active
+    // step has a section to group its fields.
+    const step = formState.steps[activeStepIndex];
+    if (step?.sections.length === 0) {
+      const next = addSection(formState, activeStepIndex);
+      setFormState(next);
+      const created = next.steps[activeStepIndex]?.sections.at(-1);
+      if (created) selectSection(created.id);
+    }
+  }, [activeStepIndex, formState, selectSection, selection, setFormState]);
 
   const handleClearDraft = useCallback(() => {
     localStorage.removeItem(STORAGE_KEY);
-    stepCounter = 0;
-    fieldCounter = 0;
-    resetHistory({
-      fields: [],
-      multiStepEnabled: false,
-      steps: [createStep()],
-    });
+    resetIdCounters();
+    resetHistory(createDefaultDefinition());
     setActiveStepIndex(0);
-    selectField(null);
+    setSelection(null);
     toast.add({ description: "Started fresh.", title: "Draft cleared" });
-  }, [resetHistory, selectField]);
+  }, [resetHistory]);
 
   const handleTapAdd = useCallback(
     (type: FieldType) => {
-      const f = createField(type, activeStepIndex);
-      updateFields((p) => [...p, f]);
-      selectField(f.id);
+      const field = newField(type);
+      setFormState((previous) => appendField(previous, activeStepIndex, field));
+      selectField(field.id);
       setMobilePanel("canvas");
       toast.add({
         description: "Tap to edit properties.",
-        title: `${f.label} added`,
+        title: `${field.attributes.label} added`,
       });
     },
-    [activeStepIndex, updateFields, selectField],
+    [activeStepIndex, setFormState, selectField],
   );
 
   const mobileTabs: {
@@ -410,6 +498,36 @@ export default function BuilderPage() {
     { icon: Settings2Icon, key: "properties", label: "Props" },
     { icon: EyeIcon, key: "output", label: "Preview" },
   ];
+
+  const renderProperties = (fullWidth?: boolean) => {
+    if (selectedField) {
+      return (
+        <FieldProperties
+          allFields={allFields}
+          field={selectedField}
+          fullWidth={fullWidth}
+          onChange={handleFieldChange}
+        />
+      );
+    }
+    if (selectedNode) {
+      return (
+        <StructureProperties
+          fullWidth={fullWidth}
+          node={selectedNode}
+          onChange={handleStructureChange}
+        />
+      );
+    }
+    return (
+      <FieldProperties
+        allFields={allFields}
+        field={null}
+        fullWidth={fullWidth}
+        onChange={handleFieldChange}
+      />
+    );
+  };
 
   return (
     <div className="relative flex h-screen flex-col bg-background">
@@ -428,16 +546,20 @@ export default function BuilderPage() {
           {/* Save indicator */}
           <div className="flex items-center gap-1">
             <div
-              className={`size-1.5 rounded-full transition-colors ${
-                saveStatus === "saved" ? "bg-primary" : "bg-muted-foreground/20"
-              }`}
+              className={cn(
+                "size-1.5 rounded-full transition-colors",
+                saveStatus === "saved"
+                  ? "bg-primary"
+                  : "bg-muted-foreground/20",
+              )}
             />
             <span
-              className={`hidden font-mono text-[10px] transition-colors sm:inline ${
+              className={cn(
+                "hidden font-mono text-[10px] transition-colors sm:inline",
                 saveStatus === "saved"
                   ? "text-primary/70"
-                  : "text-muted-foreground/30"
-              }`}
+                  : "text-muted-foreground/30",
+              )}
             >
               {saveStatus === "saved" ? "saved" : ""}
             </span>
@@ -446,14 +568,24 @@ export default function BuilderPage() {
           {/* Undo/Redo */}
           <div className="ml-1 flex items-center gap-0.5">
             <button
-              className={`rounded-md p-1 transition-colors ${canUndo ? "text-muted-foreground/60 hover:bg-accent hover:text-foreground" : "cursor-not-allowed text-muted-foreground/15"}`}
+              className={cn(
+                "rounded-md p-1 transition-colors",
+                canUndo
+                  ? "text-muted-foreground/60 hover:bg-accent hover:text-foreground"
+                  : "cursor-not-allowed text-muted-foreground/15",
+              )}
               disabled={!canUndo}
               onClick={undo}
             >
               <Undo2Icon className="size-3.5" />
             </button>
             <button
-              className={`rounded-md p-1 transition-colors ${canRedo ? "text-muted-foreground/60 hover:bg-accent hover:text-foreground" : "cursor-not-allowed text-muted-foreground/15"}`}
+              className={cn(
+                "rounded-md p-1 transition-colors",
+                canRedo
+                  ? "text-muted-foreground/60 hover:bg-accent hover:text-foreground"
+                  : "cursor-not-allowed text-muted-foreground/15",
+              )}
               disabled={!canRedo}
               onClick={redo}
             >
@@ -473,15 +605,29 @@ export default function BuilderPage() {
           <Separator className="hidden h-4 sm:block" orientation="vertical" />
 
           <button
-            className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-medium transition-all md:px-2.5 ${
+            className={cn(
+              "flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-medium transition-all md:px-2.5",
               multiStepEnabled
                 ? "bg-primary/10 text-primary"
-                : "text-muted-foreground/60 hover:bg-accent hover:text-foreground"
-            }`}
+                : "text-muted-foreground/60 hover:bg-accent hover:text-foreground",
+            )}
             onClick={toggleMultiStep}
           >
             <ListOrderedIcon className="size-3.5" />
             <span className="hidden sm:inline">Steps</span>
+          </button>
+
+          <button
+            className={cn(
+              "flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-medium transition-all md:px-2.5",
+              sectionsEnabled
+                ? "bg-primary/10 text-primary"
+                : "text-muted-foreground/60 hover:bg-accent hover:text-foreground",
+            )}
+            onClick={toggleSections}
+          >
+            <Columns3Icon className="size-3.5" />
+            <span className="hidden sm:inline">Sections</span>
           </button>
 
           {/* Desktop-only: Preview/Schema toggle */}
@@ -502,11 +648,12 @@ export default function BuilderPage() {
                   },
                 ].map(({ icon: Icon, key, label }) => (
                   <button
-                    className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-medium transition-all ${
+                    className={cn(
+                      "flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-medium transition-all",
                       rightPanel === key
                         ? "bg-background text-foreground shadow-sm"
-                        : "text-muted-foreground/50 hover:text-foreground"
-                    }`}
+                        : "text-muted-foreground/50 hover:text-foreground",
+                    )}
                     key={key}
                     onClick={() => {
                       setRightPanel(key);
@@ -527,121 +674,111 @@ export default function BuilderPage() {
         /* ─── Mobile layout: single panel at a time ─── */
         <div className="flex flex-1 flex-col overflow-hidden">
           <div className="flex-1 overflow-hidden">
-            <AnimatePresence mode="wait">
-              <motion.div
-                animate={{ opacity: 1, x: 0 }}
-                className="h-full"
-                exit={{ opacity: 0, x: -20 }}
-                initial={{ opacity: 0, x: 20 }}
-                key={mobilePanel}
-                transition={{ duration: 0.15 }}
-              >
-                {mobilePanel === "palette" && (
-                  <div className="h-full">
-                    <FieldPalette fullWidth onTapAdd={handleTapAdd} />
+            <div
+              className="h-full animate-in duration-150 fade-in slide-in-from-right-4"
+              key={mobilePanel}
+            >
+              {mobilePanel === "palette" && (
+                <div className="h-full">
+                  <FieldPalette fullWidth onTapAdd={handleTapAdd} />
+                </div>
+              )}
+              {mobilePanel === "canvas" && (
+                <DragDropProvider onDragEnd={handleDragEnd}>
+                  <FormCanvas
+                    activeStepIndex={activeStepIndex}
+                    multiStepEnabled={multiStepEnabled}
+                    onAddSection={handleAddSection}
+                    onAddStep={handleAddStep}
+                    onDuplicate={handleDuplicate}
+                    onRemove={handleRemove}
+                    onRemoveSection={handleRemoveSection}
+                    onRemoveStep={handleRemoveStep}
+                    onSelect={selectField}
+                    onSelectSection={selectSection}
+                    onSelectStep={selectStep}
+                    onStepChange={setActiveStepIndex}
+                    sections={renderedSections}
+                    sectionsEnabled={sectionsEnabled}
+                    selectedId={
+                      selection?.kind === "field" ? selection.id : null
+                    }
+                    selectedSectionId={
+                      selection?.kind === "section" ? selection.id : null
+                    }
+                    steps={steps}
+                  />
+                  <DragOverlay>
+                    {(source) =>
+                      String(source.id).startsWith("palette-") ? (
+                        <div className="rounded-lg border border-primary/30 bg-muted px-3 py-2 text-sm font-medium text-foreground shadow-glow">
+                          {String(source.id).replace("palette-", "")}
+                        </div>
+                      ) : null
+                    }
+                  </DragOverlay>
+                </DragDropProvider>
+              )}
+              {mobilePanel === "properties" && (
+                <div className="h-full overflow-y-auto">
+                  {renderProperties(true)}
+                </div>
+              )}
+              {mobilePanel === "output" && (
+                <div className="flex h-full flex-col">
+                  {/* Mini toggle for preview/schema on mobile */}
+                  <div className="flex items-center gap-1 border-b border-border bg-background p-2">
+                    {[
+                      {
+                        icon: EyeIcon,
+                        key: "preview" as RightPanel,
+                        label: "Preview",
+                      },
+                      {
+                        icon: Code2Icon,
+                        key: "schema" as RightPanel,
+                        label: "Schema",
+                      },
+                    ].map(({ icon: Icon, key, label }) => (
+                      <button
+                        className={cn(
+                          "flex flex-1 items-center justify-center gap-1.5 rounded-md px-2.5 py-1.5 text-[11px] font-medium transition-all",
+                          rightPanel === key
+                            ? "bg-background text-foreground shadow-sm"
+                            : "text-muted-foreground/50 hover:text-foreground",
+                        )}
+                        key={key}
+                        onClick={() => {
+                          setRightPanel(key);
+                        }}
+                      >
+                        <Icon className="size-3.5" />
+                        {label}
+                      </button>
+                    ))}
                   </div>
-                )}
-                {mobilePanel === "canvas" && (
-                  <DragDropProvider onDragEnd={handleDragEnd}>
-                    <FormCanvas
-                      activeStepIndex={activeStepIndex}
-                      editingStepId={editingStepId}
-                      fields={currentStepFields}
-                      multiStepEnabled={multiStepEnabled}
-                      onAddStep={handleAddStep}
-                      onDuplicate={handleDuplicate}
-                      onEditingStepChange={setEditingStepId}
-                      onRemove={handleRemove}
-                      onRemoveStep={handleRemoveStep}
-                      onRenameStep={handleRenameStep}
-                      onSelect={selectField}
-                      onStepChange={setActiveStepIndex}
-                      selectedId={selectedId}
-                      steps={steps}
-                    />
-                    <DragOverlay>
-                      {(source) =>
-                        String(source.id).startsWith("palette-") ? (
-                          <div className="rounded-lg border border-primary/30 bg-muted px-3 py-2 text-sm font-medium text-foreground shadow-glow">
-                            {String(source.id).replace("palette-", "")}
-                          </div>
-                        ) : null
-                      }
-                    </DragOverlay>
-                  </DragDropProvider>
-                )}
-                {mobilePanel === "properties" && (
-                  <div className="h-full overflow-y-auto">
-                    <FieldProperties
-                      allFields={fields}
-                      field={selectedField}
-                      fullWidth
-                      onChange={handleFieldChange}
-                    />
+                  <div className="flex-1 overflow-y-auto">
+                    {rightPanel === "preview" ? (
+                      <FormPreview definition={formState} />
+                    ) : (
+                      <SchemaOutput definition={formState} />
+                    )}
                   </div>
-                )}
-                {mobilePanel === "output" && (
-                  <div className="flex h-full flex-col">
-                    {/* Mini toggle for preview/schema on mobile */}
-                    <div className="flex items-center gap-1 border-b border-border bg-background p-2">
-                      {[
-                        {
-                          icon: EyeIcon,
-                          key: "preview" as RightPanel,
-                          label: "Preview",
-                        },
-                        {
-                          icon: Code2Icon,
-                          key: "schema" as RightPanel,
-                          label: "Schema",
-                        },
-                      ].map(({ icon: Icon, key, label }) => (
-                        <button
-                          className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-2.5 py-1.5 text-[11px] font-medium transition-all ${
-                            rightPanel === key
-                              ? "bg-background text-foreground shadow-sm"
-                              : "text-muted-foreground/50 hover:text-foreground"
-                          }`}
-                          key={key}
-                          onClick={() => {
-                            setRightPanel(key);
-                          }}
-                        >
-                          <Icon className="size-3.5" />
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="flex-1 overflow-y-auto">
-                      {rightPanel === "preview" ? (
-                        <FormPreview
-                          fields={fields}
-                          multiStepEnabled={multiStepEnabled}
-                          steps={steps}
-                        />
-                      ) : (
-                        <SchemaOutput
-                          fields={fields}
-                          multiStepEnabled={multiStepEnabled}
-                          steps={steps}
-                        />
-                      )}
-                    </div>
-                  </div>
-                )}
-              </motion.div>
-            </AnimatePresence>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Bottom tab bar */}
           <nav className="flex shrink-0 items-center border-t border-border bg-background">
             {mobileTabs.map(({ icon: Icon, key, label }) => (
               <button
-                className={`flex flex-1 flex-col items-center gap-0.5 py-2 transition-colors ${
+                className={cn(
+                  "flex flex-1 flex-col items-center gap-0.5 py-2 transition-colors",
                   mobilePanel === key
                     ? "text-primary"
-                    : "text-muted-foreground/50 hover:text-muted-foreground"
-                }`}
+                    : "text-muted-foreground/50 hover:text-muted-foreground",
+                )}
                 key={key}
                 onClick={() => {
                   setMobilePanel(key);
@@ -650,10 +787,7 @@ export default function BuilderPage() {
                 <Icon className="size-4" />
                 <span className="text-[10px] font-medium">{label}</span>
                 {mobilePanel === key && (
-                  <motion.div
-                    className="mt-0.5 h-0.5 w-4 rounded-full bg-primary"
-                    layoutId="mobile-tab-indicator"
-                  />
+                  <div className="mt-0.5 h-0.5 w-4 animate-in rounded-full bg-primary duration-150 zoom-in-50 fade-in" />
                 )}
               </button>
             ))}
@@ -666,18 +800,23 @@ export default function BuilderPage() {
             <FieldPalette />
             <FormCanvas
               activeStepIndex={activeStepIndex}
-              editingStepId={editingStepId}
-              fields={currentStepFields}
               multiStepEnabled={multiStepEnabled}
+              onAddSection={handleAddSection}
               onAddStep={handleAddStep}
               onDuplicate={handleDuplicate}
-              onEditingStepChange={setEditingStepId}
               onRemove={handleRemove}
+              onRemoveSection={handleRemoveSection}
               onRemoveStep={handleRemoveStep}
-              onRenameStep={handleRenameStep}
               onSelect={selectField}
+              onSelectSection={selectSection}
+              onSelectStep={selectStep}
               onStepChange={setActiveStepIndex}
-              selectedId={selectedId}
+              sections={renderedSections}
+              sectionsEnabled={sectionsEnabled}
+              selectedId={selection?.kind === "field" ? selection.id : null}
+              selectedSectionId={
+                selection?.kind === "section" ? selection.id : null
+              }
               steps={steps}
             />
             <DragOverlay>
@@ -691,33 +830,19 @@ export default function BuilderPage() {
             </DragOverlay>
           </DragDropProvider>
 
-          <FieldProperties
-            allFields={fields}
-            field={selectedField}
-            onChange={handleFieldChange}
-          />
+          {renderProperties()}
 
           <div className="flex w-90 min-w-0 flex-col border-l border-border bg-background">
-            <motion.div
-              animate={{ opacity: 1 }}
-              className="flex min-h-0 flex-1 flex-col"
-              initial={{ opacity: 0 }}
+            <div
+              className="flex min-h-0 flex-1 animate-in flex-col duration-200 fade-in"
               key={rightPanel}
             >
               {rightPanel === "preview" ? (
-                <FormPreview
-                  fields={fields}
-                  multiStepEnabled={multiStepEnabled}
-                  steps={steps}
-                />
+                <FormPreview definition={formState} />
               ) : (
-                <SchemaOutput
-                  fields={fields}
-                  multiStepEnabled={multiStepEnabled}
-                  steps={steps}
-                />
+                <SchemaOutput definition={formState} />
               )}
-            </motion.div>
+            </div>
           </div>
         </div>
       )}

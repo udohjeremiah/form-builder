@@ -1,50 +1,35 @@
 "use client";
 
 import { CheckIcon, CopyIcon } from "lucide-react";
-import { motion } from "motion/react";
 import { useState } from "react";
 
-import type { FormField, FormSchema, FormStep } from "@/types/form";
+import type { FormDefinition } from "@/types/form-definition";
 
-const generateJSON = (
-  fields: FormField[],
-  steps: FormStep[],
-  multiStep: boolean,
-): string => {
-  const schema: FormSchema = {
-    fields: fields.map((f) => ({
-      id: f.id,
-      label: f.label,
-      options: f.options,
-      placeholder: f.placeholder,
-      required: f.required,
-      step: f.step,
-      type: f.type,
-    })),
-    id: "form_" + Date.now().toString(36),
-    name: "My Form",
-    settings: {
-      autosave: true,
-      multiStep,
-      submitLabel: "Submit",
+import { getAllFields } from "@/lib/form-definition";
+
+const generateJSON = (definition: FormDefinition): string => {
+  const exportable: FormDefinition = {
+    attributes: {
+      autosave: definition.attributes.autosave ?? true,
+      ...(definition.attributes.description
+        ? { description: definition.attributes.description }
+        : {}),
+      multiStep: !!definition.attributes.multiStep,
+      name: definition.attributes.name ?? "My Form",
+      submitLabel: definition.attributes.submitLabel ?? "Submit",
     },
-    steps: multiStep ? steps : undefined,
+    id: definition.id,
+    steps: definition.steps,
+    version: definition.version,
   };
-  return JSON.stringify(schema, null, 2);
+  return JSON.stringify(exportable, null, 2);
 };
 
-export function SchemaOutput({
-  fields,
-  multiStepEnabled,
-  steps,
-}: {
-  fields: FormField[];
-  multiStepEnabled: boolean;
-  steps: FormStep[];
-}) {
+export function SchemaOutput({ definition }: { definition: FormDefinition }) {
   const [copied, setCopied] = useState(false);
 
-  const code = generateJSON(fields, steps, multiStepEnabled);
+  const code = generateJSON(definition);
+  const fieldCount = getAllFields(definition).length;
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(code);
@@ -74,21 +59,19 @@ export function SchemaOutput({
       </div>
 
       <div className="flex-1 overflow-auto p-6">
-        {fields.length === 0 ? (
+        {fieldCount === 0 ? (
           <div className="flex h-full items-center justify-center">
             <p className="font-mono text-sm text-muted-foreground">
               Add fields to generate schema
             </p>
           </div>
         ) : (
-          <motion.pre
-            animate={{ opacity: 1 }}
-            className="font-mono text-xs leading-relaxed text-foreground"
-            initial={{ opacity: 0 }}
-            key={[multiStepEnabled, fields.length].join("-")}
+          <pre
+            className="animate-in font-mono text-xs leading-relaxed text-foreground duration-200 fade-in"
+            key={`${definition.attributes.multiStep ? 1 : 0}-${fieldCount}`}
           >
             <code>{code}</code>
-          </motion.pre>
+          </pre>
         )}
       </div>
     </div>

@@ -10,10 +10,13 @@ import {
   StarIcon,
   UploadIcon,
 } from "lucide-react";
-import { AnimatePresence, motion } from "motion/react";
-import { useCallback, useState } from "react";
+import { Fragment, useCallback, useState } from "react";
 
-import type { FormField, FormStep } from "@/types/form";
+import type {
+  AnyFieldDefinition,
+  FormDefinition,
+  StepDefinition,
+} from "@/types/form-definition";
 
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -38,7 +41,11 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/cn";
-import { evaluateCondition, validateField } from "@/types/form";
+import {
+  getAllFields,
+  isFieldVisible,
+  validateFieldValue,
+} from "@/lib/form-definition";
 
 const FieldInput = ({
   error,
@@ -49,7 +56,7 @@ const FieldInput = ({
   value,
 }: {
   error: null | string;
-  field: FormField;
+  field: AnyFieldDefinition;
   onBlur: () => void;
   onChange: (value: string) => void;
   touched: boolean;
@@ -76,7 +83,7 @@ const FieldInput = ({
             className="cursor-pointer text-sm font-normal text-foreground"
             htmlFor={field.id}
           >
-            {field.placeholder ?? field.label}
+            {field.attributes.placeholder ?? field.attributes.label}
           </Label>
         </div>
       );
@@ -132,7 +139,7 @@ const FieldInput = ({
             {dateValue ? (
               format(dateValue, "PPP")
             ) : (
-              <span>{field.placeholder ?? "Pick a date"}</span>
+              <span>{field.attributes.placeholder ?? "Pick a date"}</span>
             )}
           </PopoverTrigger>
           <PopoverContent align="start" className="w-auto p-0">
@@ -164,10 +171,35 @@ const FieldInput = ({
       );
     }
 
+    case "email":
+    case "password":
+    case "text": {
+      const { autoComplete, maxLength, placeholder } = field.attributes;
+      return (
+        <Input
+          autoComplete={autoComplete}
+          className={errorClass}
+          maxLength={maxLength}
+          onBlur={onBlur}
+          onChange={(event) => {
+            onChange(event.target.value);
+          }}
+          placeholder={placeholder}
+          type={field.type}
+          value={value}
+        />
+      );
+    }
+
     case "file": {
       return (
         <div
-          className={`cursor-pointer rounded-lg border-2 border-dashed p-8 text-center transition-colors hover:border-primary/30 ${hasError ? "border-destructive/40 bg-destructive/5" : "border-border"}`}
+          className={cn(
+            "cursor-pointer rounded-lg border-2 border-dashed p-8 text-center transition-colors hover:border-primary/30",
+            hasError
+              ? "border-destructive/40 bg-destructive/5"
+              : "border-border",
+          )}
         >
           <UploadIcon className="mx-auto mb-2 size-5 text-muted-foreground" />
           <p className="font-mono text-xs text-muted-foreground">
@@ -177,29 +209,22 @@ const FieldInput = ({
       );
     }
 
-    case "heading": {
+    case "number": {
+      const { max, min, placeholder, step } = field.attributes;
       return (
-        <h3 className="pt-2 text-lg font-semibold text-foreground">
-          {field.label}
-        </h3>
-      );
-    }
-
-    case "hidden": {
-      return (
-        <div className="flex items-center gap-2 rounded-md border border-dashed border-border bg-muted/50 px-3 py-2">
-          <span className="font-mono text-[10px] text-muted-foreground/50">
-            Hidden: {field.label}
-          </span>
-        </div>
-      );
-    }
-
-    case "paragraph": {
-      return (
-        <p className="text-sm leading-relaxed text-muted-foreground">
-          {field.placeholder ?? field.label}
-        </p>
+        <Input
+          className={errorClass}
+          max={max}
+          min={min}
+          onBlur={onBlur}
+          onChange={(event) => {
+            onChange(event.target.value);
+          }}
+          placeholder={placeholder}
+          step={step}
+          type="number"
+          value={value}
+        />
       );
     }
 
@@ -211,7 +236,7 @@ const FieldInput = ({
           onChange={(event) => {
             onChange(event.target.value);
           }}
-          placeholder={field.placeholder ?? "+1 (555) 000-0000"}
+          placeholder={field.attributes.placeholder ?? "+1 (555) 000-0000"}
           type="tel"
           value={value}
         />
@@ -227,7 +252,7 @@ const FieldInput = ({
           }}
           value={value}
         >
-          {(field.options ?? ["Option 1", "Option 2"])
+          {(field.attributes.options ?? ["Option 1", "Option 2"])
             .filter(Boolean)
             .map((o) => (
               <div className="flex items-center gap-3" key={o}>
@@ -245,32 +270,35 @@ const FieldInput = ({
     }
 
     case "rating": {
+      const { max = 5, min = 1 } = field.attributes;
       const ratingValue = value ? Number(value) : 0;
       return (
         <div className="flex items-center gap-1">
-          {[1, 2, 3, 4, 5].map((star) => (
-            <button
-              className="p-0.5 transition-colors"
-              key={star}
-              onClick={() => {
-                onChange(String(star));
-                onBlur();
-              }}
-              type="button"
-            >
-              <StarIcon
-                className={cn(
-                  "size-6 transition-colors",
-                  star <= ratingValue
-                    ? "fill-primary text-primary"
-                    : "text-border hover:text-primary/40",
-                )}
-              />
-            </button>
-          ))}
+          {Array.from({ length: max - min + 1 }, (_, index) => min + index).map(
+            (star) => (
+              <button
+                className="p-0.5 transition-colors"
+                key={star}
+                onClick={() => {
+                  onChange(String(star));
+                  onBlur();
+                }}
+                type="button"
+              >
+                <StarIcon
+                  className={cn(
+                    "size-6 transition-colors",
+                    star <= ratingValue
+                      ? "fill-primary text-primary"
+                      : "text-border hover:text-primary/40",
+                  )}
+                />
+              </button>
+            ),
+          )}
           {ratingValue > 0 && (
             <span className="ml-2 font-mono text-xs text-muted-foreground">
-              {ratingValue}/5
+              {ratingValue}/{max}
             </span>
           )}
         </div>
@@ -292,10 +320,12 @@ const FieldInput = ({
               hasError ? "border-destructive/60 focus:ring-destructive/30" : ""
             }
           >
-            <SelectValue placeholder={field.placeholder ?? "Select..."} />
+            <SelectValue
+              placeholder={field.attributes.placeholder ?? "Select..."}
+            />
           </SelectTrigger>
           <SelectContent>
-            {(field.options ?? []).filter(Boolean).map((o) => (
+            {(field.attributes.options ?? []).filter(Boolean).map((o) => (
               <SelectItem key={o} value={o}>
                 {o}
               </SelectItem>
@@ -305,18 +335,17 @@ const FieldInput = ({
       );
     }
 
-    case "separator": {
-      return <Separator className="my-2" />;
-    }
-
     case "slider": {
-      const sliderValue = value ? Number(value) : 50;
+      const { max = 100, min = 0, step = 1 } = field.attributes;
+      const sliderValue = value
+        ? Number(value)
+        : Math.min(Math.max(50, min), max);
       return (
         <div className="space-y-3">
           <Slider
             className="w-full"
-            max={100}
-            min={0}
+            max={max}
+            min={min}
             onValueChange={(v: number | readonly number[]) => {
               if (Array.isArray(v)) {
                 onChange(String(v[0]));
@@ -325,13 +354,13 @@ const FieldInput = ({
               }
               onBlur();
             }}
-            step={1}
+            step={step}
             value={[sliderValue]}
           />
           <div className="flex justify-between font-mono text-[11px] text-muted-foreground">
-            <span>0</span>
+            <span>{min}</span>
             <span className="font-medium text-foreground">{sliderValue}</span>
-            <span>100</span>
+            <span>{max}</span>
           </div>
         </div>
       );
@@ -341,11 +370,12 @@ const FieldInput = ({
       return (
         <Textarea
           className={errorClass}
+          maxLength={field.attributes.maxLength}
           onBlur={onBlur}
           onChange={(event) => {
             onChange(event.target.value);
           }}
-          placeholder={field.placeholder}
+          placeholder={field.attributes.placeholder}
           rows={3}
           value={value}
         />
@@ -381,7 +411,7 @@ const FieldInput = ({
             className="cursor-pointer text-sm font-normal text-foreground"
             htmlFor={field.id}
           >
-            {field.placeholder ?? field.label}
+            {field.attributes.placeholder ?? field.attributes.label}
           </Label>
         </div>
       );
@@ -395,7 +425,7 @@ const FieldInput = ({
           onChange={(event) => {
             onChange(event.target.value);
           }}
-          placeholder={field.placeholder ?? "https://example.com"}
+          placeholder={field.attributes.placeholder ?? "https://example.com"}
           type="url"
           value={value}
         />
@@ -403,18 +433,7 @@ const FieldInput = ({
     }
 
     default: {
-      return (
-        <Input
-          className={errorClass}
-          onBlur={onBlur}
-          onChange={(event) => {
-            onChange(event.target.value);
-          }}
-          placeholder={field.placeholder}
-          type={field.type}
-          value={value}
-        />
-      );
+      return null;
     }
   }
 };
@@ -424,26 +443,26 @@ const ProgressBar = ({
   steps,
 }: {
   currentStep: number;
-  steps: FormStep[];
+  steps: StepDefinition[];
 }) => (
   <div className="mb-8">
     <div className="mb-3 flex items-center justify-between">
       {steps.map((step, index) => {
-        let circleClass = "border border-border bg-muted text-muted-foreground";
-        if (index < currentStep) {
-          circleClass = "bg-primary text-primary-foreground";
-        } else if (index === currentStep) {
-          circleClass = "border-2 border-primary bg-primary/10 text-primary";
-        }
+        const circleClass = cn(
+          "flex size-7 items-center justify-center rounded-full font-mono text-[11px] font-bold transition-all",
+          index < currentStep && "bg-primary text-primary-foreground",
+          index === currentStep &&
+            "border-2 border-primary bg-primary/10 text-primary",
+          index > currentStep &&
+            "border border-border bg-muted text-muted-foreground",
+        );
         return (
           <div
             className="flex flex-1 items-center last:flex-initial"
             key={step.id}
           >
             <div className="flex flex-col items-center">
-              <div
-                className={`flex size-7 items-center justify-center rounded-full font-mono text-[11px] font-bold transition-all ${circleClass}`}
-              >
+              <div className={circleClass}>
                 {index < currentStep ? (
                   <CheckIcon className="size-3.5" />
                 ) : (
@@ -451,20 +470,25 @@ const ProgressBar = ({
                 )}
               </div>
               <span
-                className={`mt-1.5 font-mono text-[10px] whitespace-nowrap ${index <= currentStep ? "text-foreground" : "text-muted-foreground"}`}
+                className={cn(
+                  "mt-1.5 font-mono text-[10px] whitespace-nowrap",
+                  index <= currentStep
+                    ? "text-foreground"
+                    : "text-muted-foreground",
+                )}
               >
-                {step.title}
+                {step.attributes.title ?? "Untitled step"}
               </span>
             </div>
             {index < steps.length - 1 && (
               <div className="mx-2 mt-[-14px] flex-1">
                 <div className="relative h-px bg-border">
-                  <motion.div
-                    animate={{ width: index < currentStep ? "100%" : "0%" }}
-                    className="absolute inset-y-0 left-0 bg-primary"
-                    initial={false}
-                    style={{ height: 1 }}
-                    transition={{ duration: 0.3 }}
+                  <div
+                    className="absolute inset-y-0 left-0 bg-primary transition-[width] duration-300"
+                    style={{
+                      height: 1,
+                      width: index < currentStep ? "100%" : "0%",
+                    }}
                   />
                 </div>
               </div>
@@ -476,27 +500,38 @@ const ProgressBar = ({
   </div>
 );
 
-export function FormPreview({
-  fields,
-  multiStepEnabled,
-  steps,
-}: {
-  fields: FormField[];
-  multiStepEnabled: boolean;
-  steps: FormStep[];
-}) {
+export function FormPreview({ definition }: { definition: FormDefinition }) {
+  const multiStepEnabled = !!definition.attributes.multiStep;
+  const steps = definition.steps;
+
   const [currentStep, setCurrentStep] = useState(0);
   const [values, setValues] = useState<Record<string, string>>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [errors, setErrors] = useState<Record<string, null | string>>({});
 
-  const stepFields = multiStepEnabled
-    ? fields.filter((f) => f.step === currentStep)
-    : fields;
+  const allFields = getAllFields(definition);
 
-  const visibleFields = stepFields.filter((f) =>
-    evaluateCondition(f.condition, values),
-  );
+  // Fields render grouped by section, with a divider between sections.
+  const renderedSections = multiStepEnabled
+    ? (steps[currentStep]?.sections ?? [])
+    : steps.flatMap((step) => step.sections);
+
+  const visibleGroups = renderedSections
+    .map((section) => ({
+      fields: section.fields.filter((f) => isFieldVisible(f, values)),
+      id: section.id,
+    }))
+    .filter((group) => group.fields.length > 0);
+
+  const visibleFields = visibleGroups.flatMap((group) => group.fields);
+
+  // Running field index per group so the entry stagger stays continuous.
+  const groupOffsets: number[] = [];
+  let accumulator = 0;
+  for (const group of visibleGroups) {
+    groupOffsets.push(accumulator);
+    accumulator += group.fields.length;
+  }
 
   const isLastStep = currentStep === steps.length - 1;
   const isFirstStep = currentStep === 0;
@@ -504,45 +539,45 @@ export function FormPreview({
   const handleChange = useCallback(
     (fieldId: string, value: string) => {
       setValues((previous) => ({ ...previous, [fieldId]: value }));
-      const field = fields.find((f) => f.id === fieldId);
+      const field = allFields.find((f) => f.id === fieldId);
       if (field && touched[fieldId]) {
         setErrors((previous) => ({
           ...previous,
-          [fieldId]: validateField(field, value),
+          [fieldId]: validateFieldValue(field, value),
         }));
       }
     },
-    [fields, touched],
+    [allFields, touched],
   );
 
   const handleBlur = useCallback(
     (fieldId: string) => {
       setTouched((previous) => ({ ...previous, [fieldId]: true }));
-      const field = fields.find((f) => f.id === fieldId);
+      const field = allFields.find((f) => f.id === fieldId);
       if (field) {
         setErrors((previous) => ({
           ...previous,
-          [fieldId]: validateField(field, values[fieldId] ?? ""),
+          [fieldId]: validateFieldValue(field, values[fieldId] ?? ""),
         }));
       }
     },
-    [fields, values],
+    [allFields, values],
   );
 
-  const validateStep = useCallback(() => {
+  const validateStep = () => {
     let hasErrors = false;
     const newErrors: Record<string, null | string> = {};
     const newTouched: Record<string, boolean> = {};
     for (const field of visibleFields) {
       newTouched[field.id] = true;
-      const error = validateField(field, values[field.id] ?? "");
+      const error = validateFieldValue(field, values[field.id] ?? "");
       newErrors[field.id] = error;
       if (error) hasErrors = true;
     }
     setTouched((previous) => ({ ...previous, ...newTouched }));
     setErrors((previous) => ({ ...previous, ...newErrors }));
     return !hasErrors;
-  }, [visibleFields, values]);
+  };
 
   const handleNext = () => {
     if (validateStep() && multiStepEnabled && !isLastStep) {
@@ -564,7 +599,7 @@ export function FormPreview({
       </div>
 
       <div className="flex-1 overflow-y-auto p-8">
-        {fields.length === 0 ? (
+        {allFields.length === 0 ? (
           <div className="flex h-full items-center justify-center">
             <p className="font-mono text-sm text-muted-foreground">
               Add fields to see preview
@@ -576,88 +611,78 @@ export function FormPreview({
               <ProgressBar currentStep={currentStep} steps={steps} />
             )}
 
-            <AnimatePresence mode="wait">
-              <motion.div
-                animate={{ opacity: 1, x: 0 }}
-                className="space-y-5"
-                exit={{ opacity: 0, x: -20 }}
-                initial={{ opacity: 0, x: 20 }}
-                key={currentStep}
-                transition={{ duration: 0.2 }}
-              >
-                {multiStepEnabled && (
-                  <h4 className="mb-4 text-sm font-semibold text-foreground">
-                    {steps[currentStep]?.title}
+            <div
+              className="animate-in space-y-5 duration-200 fade-in slide-in-from-right-4"
+              key={currentStep}
+            >
+              {multiStepEnabled && (
+                <div className="mb-4">
+                  <h4 className="text-sm font-semibold text-foreground">
+                    {steps[currentStep]?.attributes.title ?? "Untitled step"}
                   </h4>
-                )}
+                  {steps[currentStep]?.attributes.description && (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {steps[currentStep].attributes.description}
+                    </p>
+                  )}
+                </div>
+              )}
 
-                {visibleFields.length === 0 && multiStepEnabled ? (
-                  <p className="py-8 text-center font-mono text-xs text-muted-foreground">
-                    No fields in this step yet
-                  </p>
-                ) : (
-                  visibleFields.map((field, index) => {
-                    const fieldError = errors[field.id];
-                    const fieldTouched = touched[field.id];
-                    const isLayout = [
-                      "heading",
-                      "hidden",
-                      "paragraph",
-                      "separator",
-                    ].includes(field.type);
-                    return (
-                      <motion.div
-                        animate={{ opacity: 1, y: 0 }}
-                        className={isLayout ? "" : "space-y-1.5"}
-                        initial={{ opacity: 0, y: 10 }}
-                        key={field.id}
-                        transition={{ delay: index * 0.05 }}
-                      >
-                        {!isLayout &&
-                          field.type !== "checkbox" &&
-                          field.type !== "toggle" && (
-                            <Label className="flex items-center gap-1 text-sm font-medium text-foreground">
-                              {field.label}
-                              {field.required && (
-                                <span className="text-xs text-primary">*</span>
-                              )}
-                            </Label>
-                          )}
-                        <FieldInput
-                          error={fieldError ?? null}
-                          field={field}
-                          onBlur={() => {
-                            handleBlur(field.id);
-                          }}
-                          onChange={(value) => {
-                            handleChange(field.id, value);
-                          }}
-                          touched={!!fieldTouched}
-                          value={values[field.id] ?? ""}
-                        />
-                        {!isLayout && (
-                          <AnimatePresence>
-                            {fieldTouched && fieldError && (
-                              <motion.div
-                                animate={{ height: "auto", opacity: 1 }}
-                                className="flex items-center gap-1.5"
-                                exit={{ height: 0, opacity: 0 }}
-                                initial={{ height: 0, opacity: 0 }}
-                              >
-                                <AlertCircleIcon className="size-3 flex-shrink-0 text-destructive" />
-                                <span className="text-xs text-destructive">
-                                  {fieldError}
-                                </span>
-                              </motion.div>
+              {visibleFields.length === 0 && multiStepEnabled ? (
+                <p className="py-8 text-center font-mono text-xs text-muted-foreground">
+                  No fields in this step yet
+                </p>
+              ) : (
+                visibleGroups.map((group, groupIndex) => (
+                  <Fragment key={group.id}>
+                    {groupIndex > 0 && <Separator className="my-6" />}
+                    {group.fields.map((field, fieldIndex) => {
+                      const fieldError = errors[field.id];
+                      const fieldTouched = touched[field.id];
+                      const index =
+                        (groupOffsets[groupIndex] ?? 0) + fieldIndex;
+                      return (
+                        <div
+                          className="animate-in space-y-1.5 duration-300 fill-mode-both fade-in slide-in-from-bottom-2"
+                          key={field.id}
+                          style={{ animationDelay: `${index * 50}ms` }}
+                        >
+                          {field.type !== "checkbox" &&
+                            field.type !== "toggle" && (
+                              <Label className="flex items-center gap-1 text-sm font-medium text-foreground">
+                                {field.attributes.label}
+                                {field.attributes.required && (
+                                  <span className="text-xs text-primary">
+                                    *
+                                  </span>
+                                )}
+                              </Label>
                             )}
-                          </AnimatePresence>
-                        )}
-                      </motion.div>
-                    );
-                  })
-                )}
-              </motion.div>
-            </AnimatePresence>
+                          <FieldInput
+                            error={fieldError ?? null}
+                            field={field}
+                            onBlur={() => {
+                              handleBlur(field.id);
+                            }}
+                            onChange={(value) => {
+                              handleChange(field.id, value);
+                            }}
+                            touched={!!fieldTouched}
+                            value={values[field.id] ?? ""}
+                          />
+                          {fieldTouched && fieldError && (
+                            <div className="flex items-center gap-1.5 pt-1 text-xs text-destructive">
+                              <AlertCircleIcon className="size-3 shrink-0" />
+                              <span>{fieldError}</span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </Fragment>
+                ))
+              )}
+            </div>
 
             <div className="mt-8 flex gap-3">
               {multiStepEnabled && !isFirstStep && (
@@ -681,7 +706,7 @@ export function FormPreview({
                     Next <ChevronRightIcon className="size-3.5" />
                   </>
                 ) : (
-                  "Submit"
+                  (definition.attributes.submitLabel ?? "Submit")
                 )}
               </Button>
             </div>

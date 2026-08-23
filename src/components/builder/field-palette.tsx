@@ -9,15 +9,12 @@ import {
   ChevronDownIcon,
   CircleIcon,
   ClockIcon,
-  EyeOffIcon,
-  FileTextIcon,
   GripVerticalIcon,
+  HandGrabIcon,
   HashIcon,
-  HeadingIcon,
   LinkIcon,
   LockIcon,
   MailIcon,
-  MinusIcon,
   PaletteIcon,
   PhoneIcon,
   PlusIcon,
@@ -27,12 +24,12 @@ import {
   TypeIcon,
   UploadIcon,
 } from "lucide-react";
-import { motion } from "motion/react";
 
-import type { FieldType } from "@/types/form";
+import type { FieldType } from "@/types/form-definition";
 
 import { Separator } from "@/components/ui/separator";
-import { FIELD_TYPES } from "@/types/form";
+import { cn } from "@/lib/cn";
+import { FIELD_TYPES } from "@/types/form-definition";
 
 const iconMap: Record<string, React.FC<{ className?: string }>> = {
   AlignLeftIcon,
@@ -42,14 +39,10 @@ const iconMap: Record<string, React.FC<{ className?: string }>> = {
   ChevronDownIcon,
   CircleIcon,
   ClockIcon,
-  EyeOffIcon,
-  FileTextIcon,
   HashIcon,
-  HeadingIcon,
   LinkIcon,
   LockIcon,
   MailIcon,
-  MinusIcon,
   PaletteIcon,
   PhoneIcon,
   SlidersHorizontalIcon,
@@ -77,9 +70,10 @@ const DraggableField = ({
 
   return (
     <div
-      className={`drag-field group flex items-center gap-2.5 rounded-lg border border-transparent bg-transparent px-3 py-2 text-sm transition-all hover:border-border hover:bg-accent ${
-        isDragging ? "scale-95 opacity-40" : ""
-      }`}
+      className={cn(
+        "drag-field group flex items-center gap-2.5 rounded-lg border border-transparent bg-transparent px-3 py-2 text-sm transition-all hover:border-border hover:bg-accent",
+        isDragging && "scale-95 opacity-40",
+      )}
       ref={ref}
     >
       <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary/8 transition-colors group-hover:bg-primary/12">
@@ -109,12 +103,12 @@ const TappableField = ({
   const Icon = iconMap[icon];
 
   return (
-    <motion.button
-      className="group flex w-full items-center gap-3 rounded-xl border border-border/50 bg-muted/30 px-4 py-3 text-left transition-all hover:bg-accent active:bg-primary/10"
+    <button
+      className="group flex w-full items-center gap-3 rounded-xl border border-border/50 bg-muted/30 px-4 py-3 text-left transition-all hover:bg-accent active:scale-95 active:bg-primary/10"
       onClick={() => {
         onTap(type);
       }}
-      whileTap={{ scale: 0.95 }}
+      type="button"
     >
       <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 transition-colors group-active:bg-primary/20">
         {Icon && (
@@ -125,7 +119,7 @@ const TappableField = ({
         {label}
       </span>
       <PlusIcon className="size-4 text-muted-foreground/30 transition-colors group-active:text-primary" />
-    </motion.button>
+    </button>
   );
 };
 
@@ -140,7 +134,10 @@ export function FieldPalette({
 
   return (
     <div
-      className={`${fullWidth ? "w-full" : "w-56"} flex h-full flex-col border-r border-border bg-background`}
+      className={cn(
+        fullWidth ? "w-full" : "w-56",
+        "flex h-full flex-col border-r border-border bg-background",
+      )}
     >
       <div className="px-4 pt-4 pb-2">
         <h3 className="text-[11px] font-semibold tracking-widest text-muted-foreground/60 uppercase">
@@ -156,29 +153,21 @@ export function FieldPalette({
         <div
           className={isTapMode ? "space-y-1.5 px-1 pb-4" : "space-y-0.5 pb-4"}
         >
-          {FIELD_TYPES.map((field, index) => (
-            <motion.div
-              animate={{ opacity: 1, x: 0 }}
-              initial={{ opacity: 0, x: -8 }}
-              key={field.type}
-              transition={{ delay: index * 0.025 }}
-            >
-              {isTapMode ? (
-                <TappableField {...field} onTap={onTapAdd} />
-              ) : (
-                <DraggableField {...field} />
-              )}
-            </motion.div>
-          ))}
+          {FIELD_TYPES.map((field) =>
+            isTapMode ? (
+              <TappableField {...field} key={field.type} onTap={onTapAdd} />
+            ) : (
+              <DraggableField {...field} key={field.type} />
+            ),
+          )}
         </div>
       </div>
       {!isTapMode && (
         <>
           <Separator />
-          <div className="p-3">
-            <p className="text-center font-mono text-[10px] text-muted-foreground/50">
-              Drag to canvas
-            </p>
+          <div className="flex items-center justify-center gap-2 p-3 text-muted-foreground/50">
+            <HandGrabIcon className="size-4" />
+            <p className="text-center font-mono text-[10px]">Drag to canvas</p>
           </div>
         </>
       )}

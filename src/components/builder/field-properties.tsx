@@ -1,9 +1,11 @@
 "use client";
 
 import { EyeIcon, PlusIcon, ShieldCheckIcon, XIcon } from "lucide-react";
-import { AnimatePresence, motion } from "motion/react";
 
-import type { FormField, ValidationRule } from "@/types/form";
+import type {
+  AnyFieldDefinition,
+  ValidationRule,
+} from "@/types/form-definition";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,11 +21,96 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/cn";
 import {
   CONDITION_OPERATORS,
   VALIDATION_LABELS,
   VALIDATION_OPTIONS,
-} from "@/types/form";
+} from "@/types/form-definition";
+
+const parseNumberInput = (raw: string): number | undefined => {
+  if (raw.trim() === "") return undefined;
+  const parsed = Number(raw);
+  return Number.isNaN(parsed) ? undefined : parsed;
+};
+
+const LENGTH_TYPE_NAMES = new Set([
+  "email",
+  "password",
+  "phone",
+  "text",
+  "textarea",
+  "url",
+]);
+
+type LengthField = Extract<
+  AnyFieldDefinition,
+  {
+    type: "email" | "password" | "phone" | "text" | "textarea" | "url";
+  }
+>;
+
+const isLengthField = (field: AnyFieldDefinition): field is LengthField =>
+  LENGTH_TYPE_NAMES.has(field.type);
+
+type NumericField = Extract<
+  AnyFieldDefinition,
+  { type: "number" | "rating" | "slider" }
+>;
+
+const isNumericField = (field: AnyFieldDefinition): field is NumericField =>
+  ["number", "rating", "slider"].includes(field.type);
+
+const NumberAttribute = ({
+  label,
+  onValueChange,
+  value,
+}: {
+  label: string;
+  onValueChange: (value: number | undefined) => void;
+  value: number | undefined;
+}) => (
+  <div className="flex items-center justify-between py-0.5">
+    <Label className="text-[10px] font-medium text-muted-foreground/60">
+      {label}
+    </Label>
+    <Input
+      className="h-7 w-20 text-right font-mono text-xs"
+      onChange={(event) => {
+        onValueChange(parseNumberInput(event.target.value));
+      }}
+      type="number"
+      value={value ?? ""}
+    />
+  </div>
+);
+
+const TextAttribute = ({
+  label,
+  onValueChange,
+  placeholder,
+  value,
+}: {
+  label: string;
+  onValueChange: (value: string) => void;
+  placeholder?: string;
+  value: string;
+}) => (
+  <div className="flex items-center justify-between gap-2 py-0.5">
+    <Label className="shrink-0 text-[10px] font-medium text-muted-foreground/60">
+      {label}
+    </Label>
+    <Input
+      className="h-7 min-w-0 flex-1 font-mono text-xs"
+      onChange={(event) => {
+        onValueChange(event.target.value);
+      }}
+      placeholder={placeholder}
+      type="text"
+      value={value}
+    />
+  </div>
+);
 
 const ValidationRuleEditor = ({
   index,
@@ -39,12 +126,7 @@ const ValidationRuleEditor = ({
   const needsValue = ["max", "min", "pattern"].includes(rule.type);
 
   return (
-    <motion.div
-      animate={{ height: "auto", opacity: 1 }}
-      className="space-y-2 rounded-lg border border-border/60 bg-muted/50 p-2.5"
-      exit={{ height: 0, opacity: 0 }}
-      initial={{ height: 0, opacity: 0 }}
-    >
+    <div className="animate-in space-y-2 rounded-lg border border-border/60 bg-muted/50 p-2.5 duration-200 fade-in slide-in-from-top-1">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
           <ShieldCheckIcon className="size-3 text-primary/60" />
@@ -90,7 +172,7 @@ const ValidationRuleEditor = ({
         type="text"
         value={rule.message}
       />
-    </motion.div>
+    </div>
   );
 };
 
@@ -100,15 +182,21 @@ export function FieldProperties({
   fullWidth,
   onChange,
 }: {
-  allFields?: FormField[];
-  field: FormField | null;
+  allFields?: AnyFieldDefinition[];
+  field: AnyFieldDefinition | null;
   fullWidth?: boolean;
-  onChange: (id: string, updates: Partial<FormField>) => void;
+  onChange: (
+    id: string,
+    updater: (field: AnyFieldDefinition) => AnyFieldDefinition,
+  ) => void;
 }) {
   if (!field) {
     return (
       <div
-        className={`${fullWidth ? "w-full" : "w-64"} flex items-center justify-center border-l border-border bg-background p-6`}
+        className={cn(
+          fullWidth ? "w-full" : "w-64",
+          "flex items-center justify-center border-l border-border bg-background p-6",
+        )}
       >
         <div className="text-center">
           <div className="mx-auto mb-3 flex size-10 items-center justify-center rounded-xl bg-muted">
@@ -123,7 +211,7 @@ export function FieldProperties({
   }
 
   const availableValidations = VALIDATION_OPTIONS[field.type];
-  const currentRules = field.validation ?? [];
+  const currentRules = field.validation;
   const usedTypes = new Set(currentRules.map((r) => r.type));
   const addableRules = availableValidations.filter(
     (t) => !usedTypes.has(t) && t !== "required",
@@ -134,7 +222,8 @@ export function FieldProperties({
       max: 100,
       min: 1,
     };
-    onChange(field.id, {
+    onChange(field.id, () => ({
+      ...field,
       validation: [
         ...currentRules,
         {
@@ -143,31 +232,43 @@ export function FieldProperties({
           value: ruleDefaults[type],
         },
       ],
-    });
+    }));
   };
 
   const handleUpdateRule = (
     index: number,
     updates: Partial<ValidationRule>,
   ) => {
-    onChange(field.id, {
+    onChange(field.id, () => ({
+      ...field,
       validation: currentRules.map((r, index_) =>
         index_ === index ? { ...r, ...updates } : r,
       ),
-    });
+    }));
   };
 
   const handleRemoveRule = (index: number) => {
-    onChange(field.id, {
+    onChange(field.id, () => ({
+      ...field,
       validation: currentRules.filter((_, index_) => index_ !== index),
-    });
+    }));
+  };
+
+  const setAttribute = <T extends AnyFieldDefinition["attributes"]>(
+    patch: Partial<T>,
+  ) => {
+    onChange(field.id, () => ({
+      ...field,
+      attributes: { ...field.attributes, ...patch },
+    }));
   };
 
   return (
-    <motion.div
-      animate={{ opacity: 1, x: 0 }}
-      className={`${fullWidth ? "w-full" : "w-64"} overflow-y-auto border-l border-border bg-background p-4`}
-      initial={{ opacity: 0, x: 8 }}
+    <div
+      className={cn(
+        fullWidth ? "w-full" : "w-64",
+        "animate-in overflow-y-auto border-l border-border bg-background p-4 duration-200 fade-in slide-in-from-right-4",
+      )}
       key={field.id}
     >
       <div className="mb-4 flex items-center justify-between">
@@ -175,7 +276,7 @@ export function FieldProperties({
           Properties
         </h3>
         <Badge
-          className="border-0 bg-primary/8 font-mono text-[9px] text-primary/70 uppercase"
+          className="bg-primary/8 font-mono text-[9px] text-primary/70 uppercase"
           variant="secondary"
         >
           {field.type}
@@ -190,9 +291,9 @@ export function FieldProperties({
           <Input
             className="h-8 text-[13px]"
             onChange={(event) => {
-              onChange(field.id, { label: event.target.value });
+              setAttribute({ label: event.target.value });
             }}
-            value={field.label}
+            value={field.attributes.label}
           />
         </div>
 
@@ -203,9 +304,9 @@ export function FieldProperties({
           <Input
             className="h-8 text-[13px]"
             onChange={(event) => {
-              onChange(field.id, { placeholder: event.target.value });
+              setAttribute({ placeholder: event.target.value });
             }}
-            value={field.placeholder ?? ""}
+            value={field.attributes.placeholder ?? ""}
           />
         </div>
 
@@ -214,12 +315,106 @@ export function FieldProperties({
             Required
           </Label>
           <Switch
-            checked={!!field.required}
+            checked={!!field.attributes.required}
             onCheckedChange={(v) => {
-              onChange(field.id, { required: v });
+              setAttribute({ required: v });
             }}
           />
         </div>
+
+        {isLengthField(field) && (
+          <>
+            <NumberAttribute
+              label="Min Length"
+              onValueChange={(v) => {
+                setAttribute({ minLength: v });
+              }}
+              value={field.attributes.minLength}
+            />
+            <NumberAttribute
+              label="Max Length"
+              onValueChange={(v) => {
+                setAttribute({ maxLength: v });
+              }}
+              value={field.attributes.maxLength}
+            />
+            <TextAttribute
+              label="AutoComplete"
+              onValueChange={(v) => {
+                setAttribute({ autoComplete: v === "" ? undefined : v });
+              }}
+              placeholder="e.g. email"
+              value={field.attributes.autoComplete ?? ""}
+            />
+          </>
+        )}
+
+        {isNumericField(field) && (
+          <>
+            <NumberAttribute
+              label="Min Value"
+              onValueChange={(v) => {
+                setAttribute({ min: v });
+              }}
+              value={field.attributes.min}
+            />
+            <NumberAttribute
+              label="Max Value"
+              onValueChange={(v) => {
+                setAttribute({ max: v });
+              }}
+              value={field.attributes.max}
+            />
+            {field.type !== "rating" && (
+              <NumberAttribute
+                label="Step"
+                onValueChange={(v) => {
+                  setAttribute({ step: v });
+                }}
+                value={field.attributes.step}
+              />
+            )}
+          </>
+        )}
+
+        {field.type === "file" && (
+          <>
+            <TextAttribute
+              label="Accept"
+              onValueChange={(v) => {
+                setAttribute({
+                  accept:
+                    v.trim() === ""
+                      ? undefined
+                      : v
+                          .split(",")
+                          .map((part) => part.trim())
+                          .filter(Boolean),
+                });
+              }}
+              placeholder=".pdf, .png"
+              value={(field.attributes.accept ?? []).join(", ")}
+            />
+            <NumberAttribute
+              label="Max Size (bytes)"
+              onValueChange={(v) => {
+                setAttribute({ maxSize: v });
+              }}
+              value={field.attributes.maxSize}
+            />
+            <div className="flex items-center justify-between py-1">
+              <Label className="text-[11px] font-medium text-muted-foreground/70">
+                Multiple Files
+              </Label>
+              <Switch
+                checked={!!field.attributes.multiple}
+                onCheckedChange={(v) => {
+                  setAttribute({ multiple: v });
+                }}
+              />
+            </div>
+          </>
+        )}
 
         {(field.type === "select" || field.type === "radio") && (
           <div className="space-y-1">
@@ -229,13 +424,13 @@ export function FieldProperties({
             <Textarea
               className="resize-none font-mono text-xs"
               onChange={(event) => {
-                onChange(field.id, {
+                setAttribute({
                   options: event.target.value.split("\n"),
                 });
               }}
               placeholder="One per line"
               rows={3}
-              value={(field.options ?? []).join("\n")}
+              value={(field.attributes.options ?? []).join("\n")}
             />
           </div>
         )}
@@ -259,17 +454,15 @@ export function FieldProperties({
           </div>
 
           <div className="mb-2 space-y-1.5">
-            <AnimatePresence>
-              {currentRules.map((rule, index) => (
-                <ValidationRuleEditor
-                  index={index}
-                  key={`${rule.type}-${index}`}
-                  onChange={handleUpdateRule}
-                  onRemove={handleRemoveRule}
-                  rule={rule}
-                />
-              ))}
-            </AnimatePresence>
+            {currentRules.map((rule, index) => (
+              <ValidationRuleEditor
+                index={index}
+                key={`${rule.type}-${index}`}
+                onChange={handleUpdateRule}
+                onRemove={handleRemoveRule}
+                rule={rule}
+              />
+            ))}
           </div>
 
           {addableRules.length > 0 && (
@@ -306,7 +499,7 @@ export function FieldProperties({
             <span className="text-[11px] font-semibold tracking-widest text-muted-foreground/60 uppercase">
               Visibility
             </span>
-            {field.condition?.fieldId && (
+            {field.conditions.show?.fieldId && (
               <Badge
                 className="border-0 bg-accent/20 font-mono text-[9px] text-accent"
                 variant="secondary"
@@ -322,53 +515,50 @@ export function FieldProperties({
               Show conditionally
             </Label>
             <Switch
-              checked={!!field.condition}
+              checked={!!field.conditions.show}
               onCheckedChange={(checked) => {
-                if (checked) {
-                  onChange(field.id, {
-                    condition: { fieldId: "", operator: "not_empty" },
-                  });
-                } else {
-                  onChange(field.id, { condition: undefined });
-                }
+                onChange(field.id, () => ({
+                  ...field,
+                  conditions: {
+                    ...field.conditions,
+                    show: checked
+                      ? { fieldId: "", operator: "not_empty" }
+                      : undefined,
+                  },
+                }));
               }}
             />
           </div>
 
-          {field.condition && (
-            <motion.div
-              animate={{ height: "auto", opacity: 1 }}
-              className="space-y-2 rounded-lg border border-border/60 bg-muted/50 p-2.5"
-              exit={{ height: 0, opacity: 0 }}
-              initial={{ height: 0, opacity: 0 }}
-            >
+          {!!field.conditions.show && (
+            <div className="space-y-2 rounded-lg border border-border/60 bg-muted/50 p-2.5">
               <div className="space-y-1">
                 <Label className="text-[10px] font-medium text-muted-foreground/60">
                   When field
                 </Label>
                 <Select
                   onValueChange={(v) => {
-                    if (!field.condition || !v) return;
-                    onChange(field.id, {
-                      condition: { ...field.condition, fieldId: v },
-                    });
+                    const current = field.conditions.show;
+                    if (!current || !v) return;
+                    onChange(field.id, () => ({
+                      ...field,
+                      conditions: {
+                        ...field.conditions,
+                        show: { ...current, fieldId: v },
+                      },
+                    }));
                   }}
-                  value={field.condition.fieldId}
+                  value={field.conditions.show.fieldId}
                 >
                   <SelectTrigger className="h-7 text-xs">
                     <SelectValue placeholder="Select a field..." />
                   </SelectTrigger>
                   <SelectContent>
                     {allFields
-                      ?.filter(
-                        (f) =>
-                          f.id !== field.id &&
-                          f.type !== "heading" &&
-                          f.type !== "separator",
-                      )
+                      ?.filter((f) => f.id !== field.id)
                       .map((f) => (
                         <SelectItem className="text-xs" key={f.id} value={f.id}>
-                          {f.label}
+                          {f.attributes.label}
                         </SelectItem>
                       ))}
                   </SelectContent>
@@ -381,15 +571,17 @@ export function FieldProperties({
                 </Label>
                 <Select
                   onValueChange={(v) => {
-                    if (!field.condition || !v) return;
-                    onChange(field.id, {
-                      condition: {
-                        ...field.condition,
-                        operator: v,
+                    const current = field.conditions.show;
+                    if (!current || !v) return;
+                    onChange(field.id, () => ({
+                      ...field,
+                      conditions: {
+                        ...field.conditions,
+                        show: { ...current, operator: v },
                       },
-                    });
+                    }));
                   }}
-                  value={field.condition.operator}
+                  value={field.conditions.show.operator}
                 >
                   <SelectTrigger className="h-7 text-xs">
                     <SelectValue />
@@ -408,7 +600,9 @@ export function FieldProperties({
                 </Select>
               </div>
 
-              {!["empty", "not_empty"].includes(field.condition.operator) && (
+              {!["empty", "not_empty"].includes(
+                field.conditions.show.operator,
+              ) && (
                 <div className="space-y-1">
                   <Label className="text-[10px] font-medium text-muted-foreground/60">
                     Value
@@ -416,20 +610,23 @@ export function FieldProperties({
                   <Input
                     className="h-7 font-mono text-xs"
                     onChange={(event) => {
-                      if (!field.condition) return;
-                      onChange(field.id, {
-                        condition: {
-                          ...field.condition,
-                          value: event.target.value,
+                      const current = field.conditions.show;
+                      if (!current) return;
+                      const value = event.target.value;
+                      onChange(field.id, () => ({
+                        ...field,
+                        conditions: {
+                          ...field.conditions,
+                          show: { ...current, value },
                         },
-                      });
+                      }));
                     }}
                     placeholder="Expected value..."
-                    value={field.condition.value ?? ""}
+                    value={field.conditions.show.value}
                   />
                 </div>
               )}
-            </motion.div>
+            </div>
           )}
         </div>
 
@@ -439,6 +636,6 @@ export function FieldProperties({
           {field.id}
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 }
