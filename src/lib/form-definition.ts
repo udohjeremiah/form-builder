@@ -9,7 +9,7 @@ import type {
   TitledAttributes,
 } from "@/types/form-definition";
 
-import { getFieldEntry, hasAttribute } from "@/lib/field-registry";
+import { getFieldEntry } from "@/lib/field-registry";
 
 const FORM_DEFINITION_VERSION = 1;
 
@@ -81,7 +81,6 @@ export const newField = (type: FieldType): AnyFieldDefinition => {
     conditions: {},
     id: newFieldId(),
     type,
-    validation: [],
   };
 };
 
@@ -363,22 +362,19 @@ export function isFieldVisible(
   return true;
 }
 
+const EMAIL_FORMAT = /^[^\s@]+@[^\s@][^\s.@]*\.[^\s@]+$/;
+
 export function validateFieldValue(
   field: AnyFieldDefinition,
   value: string,
 ): null | string {
-  const { attributes, validation } = field;
+  const { attributes } = field;
   if (attributes.required && !value.trim()) {
-    const customMessage = validation.find(
-      (rule) => rule.type === "required",
-    )?.message;
-    return customMessage ?? `${attributes.label} is required`;
+    return `${attributes.label} is required`;
   }
 
   if (!value && !attributes.required) return null;
 
-  // Native attribute bounds are checked before explicit rules so that
-  // user-defined rule messages still take precedence where both apply.
   switch (field.type) {
     case "email":
     case "password":
@@ -392,6 +388,19 @@ export function validateFieldValue(
       }
       if (maxLength !== undefined && value.length > maxLength) {
         return `Maximum ${maxLength} characters`;
+      }
+      if ("pattern" in field.attributes && field.attributes.pattern) {
+        try {
+          // eslint-disable-next-line security/detect-non-literal-regexp -- pattern is a user-defined attribute
+          if (!new RegExp(field.attributes.pattern).test(value)) {
+            return "Invalid format";
+          }
+        } catch {
+          break;
+        }
+      }
+      if (field.type === "email" && !EMAIL_FORMAT.test(value)) {
+        return "Invalid email address";
       }
       break;
     }
@@ -412,47 +421,6 @@ export function validateFieldValue(
     }
   }
 
-  for (const rule of validation) {
-    switch (rule.type) {
-      case "email": {
-        if (!/^[^\s@]+@[^\s@][^\s.@]*\.[^\s@]+$/.test(value)) {
-          return rule.message || "Invalid email address";
-        }
-        break;
-      }
-      case "max": {
-        if (hasAttribute(field.type, "min")) {
-          if (Number(value) > Number(rule.value))
-            return rule.message || `Maximum value is ${rule.value}`;
-        } else {
-          if (value.length > Number(rule.value))
-            return rule.message || `Maximum ${rule.value} characters`;
-        }
-        break;
-      }
-      case "min": {
-        if (hasAttribute(field.type, "min")) {
-          if (Number(value) < Number(rule.value))
-            return rule.message || `Minimum value is ${rule.value}`;
-        } else {
-          if (value.length < Number(rule.value))
-            return rule.message || `Minimum ${rule.value} characters`;
-        }
-        break;
-      }
-      case "pattern": {
-        try {
-          // eslint-disable-next-line security/detect-non-literal-regexp -- pattern comes from a user-defined validation rule
-          if (rule.value && !new RegExp(String(rule.value)).test(value)) {
-            return rule.message || "Invalid format";
-          }
-        } catch {
-          break;
-        }
-        break;
-      }
-    }
-  }
   return null;
 }
 

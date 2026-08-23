@@ -649,14 +649,21 @@ export function FormPreview({ definition }: { definition: FormDefinition }) {
                         >
                           {field.type !== "checkbox" &&
                             field.type !== "toggle" && (
-                              <Label className="flex items-center gap-1 text-sm font-medium text-foreground">
-                                {field.attributes.label}
-                                {field.attributes.required && (
-                                  <span className="text-xs text-primary">
-                                    *
-                                  </span>
+                              <>
+                                <Label className="flex items-center gap-1 text-sm font-medium text-foreground">
+                                  {field.attributes.label}
+                                  {field.attributes.required && (
+                                    <span className="text-xs text-primary">
+                                      *
+                                    </span>
+                                  )}
+                                </Label>
+                                {field.attributes.description && (
+                                  <p className="text-xs text-muted-foreground">
+                                    {field.attributes.description}
+                                  </p>
                                 )}
-                              </Label>
+                              </>
                             )}
                           <FieldInput
                             error={fieldError ?? null}
@@ -670,6 +677,13 @@ export function FormPreview({ definition }: { definition: FormDefinition }) {
                             touched={!!fieldTouched}
                             value={values[field.id] ?? ""}
                           />
+                          {(field.type === "checkbox" ||
+                            field.type === "toggle") &&
+                            field.attributes.description && (
+                              <p className="text-xs text-muted-foreground">
+                                {field.attributes.description}
+                              </p>
+                            )}
                           {fieldTouched && fieldError && (
                             <div className="flex items-center gap-1.5 pt-1 text-xs text-destructive">
                               <AlertCircleIcon className="size-3 shrink-0" />

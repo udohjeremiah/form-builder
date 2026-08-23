@@ -3,6 +3,7 @@ export type AnyFieldDefinition = {
 }[FieldType];
 
 export interface BaseFieldAttributes {
+  description?: string;
   label: string;
   placeholder?: string;
   required?: boolean;
@@ -59,7 +60,6 @@ export interface FieldDefinition<Type extends FieldType = FieldType> {
   conditions: FieldConditions;
   id: string;
   type: Type;
-  validation: ValidationRule[];
 }
 
 export type FieldType =
@@ -118,6 +118,7 @@ export interface PasswordFieldAttributes extends BaseFieldAttributes {
   autoComplete?: string;
   maxLength?: number;
   minLength?: number;
+  pattern?: string;
 }
 
 export interface PersistedFormDefinition extends FormDefinition {
@@ -128,6 +129,7 @@ export interface PhoneFieldAttributes extends BaseFieldAttributes {
   autoComplete?: string;
   maxLength?: number;
   minLength?: number;
+  pattern?: string;
 }
 
 export interface RatingFieldAttributes extends BaseFieldAttributes {
@@ -163,6 +165,7 @@ export interface TextFieldAttributes extends BaseFieldAttributes {
   autoComplete?: string;
   maxLength?: number;
   minLength?: number;
+  pattern?: string;
 }
 
 export interface TitledAttributes {
@@ -174,13 +177,5 @@ export interface UrlFieldAttributes extends BaseFieldAttributes {
   autoComplete?: string;
   maxLength?: number;
   minLength?: number;
+  pattern?: string;
 }
-
-export interface ValidationRule {
-  message: string;
-  type: ValidationRuleType;
-  value?: number | string;
-}
-
-export type ValidationRuleType =
-  "custom" | "email" | "max" | "min" | "pattern" | "required";

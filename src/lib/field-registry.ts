@@ -3,7 +3,6 @@ import type {
   ConditionOperator,
   FieldAttributesByType,
   FieldType,
-  ValidationRuleType,
 } from "@/types/form-definition";
 
 interface AttributeEditorMeta<Type extends FieldType = FieldType> {
@@ -19,7 +18,6 @@ interface FieldRegistryEntry<Type extends FieldType = FieldType> {
   icon: string;
   label: string;
   type: Type;
-  validation: readonly ValidationRuleType[];
 }
 
 const FIELD_REGISTRY: {
@@ -31,7 +29,6 @@ const FIELD_REGISTRY: {
     icon: "CheckSquareIcon",
     label: "Checkbox",
     type: "checkbox",
-    validation: ["required"],
   },
   color: {
     attributes: [],
@@ -39,7 +36,6 @@ const FIELD_REGISTRY: {
     icon: "PaletteIcon",
     label: "Color",
     type: "color",
-    validation: ["required"],
   },
   date: {
     attributes: [],
@@ -47,7 +43,6 @@ const FIELD_REGISTRY: {
     icon: "CalendarIcon",
     label: "Date",
     type: "date",
-    validation: ["required"],
   },
   datetime: {
     attributes: [],
@@ -55,87 +50,93 @@ const FIELD_REGISTRY: {
     icon: "CalendarClockIcon",
     label: "Date & Time",
     type: "datetime",
-    validation: ["required"],
   },
   email: {
     attributes: [
       {
         key: "autoComplete",
         kind: "text",
-        label: "AutoComplete",
+        label: "Autocomplete",
         placeholder: "e.g. email",
       },
-      { key: "maxLength", kind: "number", label: "Max Length" },
-      { key: "minLength", kind: "number", label: "Min Length" },
+      { key: "maxLength", kind: "number", label: "Maximum length" },
+      { key: "minLength", kind: "number", label: "Minimum length" },
     ],
     defaults: () => ({}),
     icon: "MailIcon",
     label: "Email",
     type: "email",
-    validation: ["required", "email"],
   },
   file: {
     attributes: [
       {
         key: "accept",
         kind: "csv",
-        label: "Accept",
+        label: "Accepted file types",
         placeholder: ".pdf, .png",
       },
-      { key: "maxSize", kind: "number", label: "Max Size (bytes)" },
-      { key: "multiple", kind: "boolean", label: "Multiple Files" },
+      { key: "maxSize", kind: "number", label: "Maximum file size" },
+      { key: "multiple", kind: "boolean", label: "Multiple" },
     ],
     defaults: () => ({}),
     icon: "UploadIcon",
     label: "File",
     type: "file",
-    validation: ["required"],
   },
   number: {
     attributes: [
-      { key: "max", kind: "number", label: "Max Value" },
-      { key: "min", kind: "number", label: "Min Value" },
+      { key: "max", kind: "number", label: "Maximum" },
+      { key: "min", kind: "number", label: "Minimum" },
       { key: "step", kind: "number", label: "Step" },
     ],
     defaults: () => ({}),
     icon: "HashIcon",
     label: "Number",
     type: "number",
-    validation: ["required", "min", "max"],
   },
   password: {
     attributes: [
       {
         key: "autoComplete",
         kind: "text",
-        label: "AutoComplete",
+        label: "Autocomplete",
         placeholder: "e.g. email",
       },
-      { key: "maxLength", kind: "number", label: "Max Length" },
-      { key: "minLength", kind: "number", label: "Min Length" },
+      { key: "maxLength", kind: "number", label: "Maximum length" },
+      { key: "minLength", kind: "number", label: "Minimum length" },
+      {
+        key: "pattern",
+        kind: "text",
+        label: "Pattern",
+        placeholder: "^[A-Za-z]+$",
+      },
     ],
     defaults: () => ({}),
     icon: "LockIcon",
     label: "Password",
     type: "password",
-    validation: ["required", "min", "max", "pattern"],
   },
   phone: {
     attributes: [
       {
         key: "autoComplete",
         kind: "text",
-        label: "AutoComplete",
+        label: "Autocomplete",
         placeholder: "e.g. email",
       },
-      { key: "maxLength", kind: "number", label: "Max Length" },
-      { key: "minLength", kind: "number", label: "Min Length" },
+      { key: "maxLength", kind: "number", label: "Maximum length" },
+      { key: "minLength", kind: "number", label: "Minimum length" },
+      {
+        key: "pattern",
+        kind: "text",
+        label: "Pattern",
+        placeholder: "^[A-Za-z]+$",
+      },
     ],
     defaults: () => ({}),
     icon: "PhoneIcon",
     label: "Phone",
     type: "phone",
-    validation: ["required", "pattern"],
   },
   radio: {
     attributes: [
@@ -150,18 +151,16 @@ const FIELD_REGISTRY: {
     icon: "CircleIcon",
     label: "Radio",
     type: "radio",
-    validation: ["required"],
   },
   rating: {
     attributes: [
-      { key: "max", kind: "number", label: "Max Value" },
-      { key: "min", kind: "number", label: "Min Value" },
+      { key: "max", kind: "number", label: "Maximum" },
+      { key: "min", kind: "number", label: "Minimum" },
     ],
     defaults: () => ({}),
     icon: "StarIcon",
     label: "Rating",
     type: "rating",
-    validation: ["required", "min", "max"],
   },
   select: {
     attributes: [
@@ -176,53 +175,55 @@ const FIELD_REGISTRY: {
     icon: "ChevronDownIcon",
     label: "Select",
     type: "select",
-    validation: ["required"],
   },
   slider: {
     attributes: [
-      { key: "max", kind: "number", label: "Max Value" },
-      { key: "min", kind: "number", label: "Min Value" },
+      { key: "max", kind: "number", label: "Maximum" },
+      { key: "min", kind: "number", label: "Minimum" },
       { key: "step", kind: "number", label: "Step" },
     ],
     defaults: () => ({}),
     icon: "SlidersHorizontalIcon",
     label: "Slider",
     type: "slider",
-    validation: ["required", "min", "max"],
   },
   text: {
     attributes: [
       {
         key: "autoComplete",
         kind: "text",
-        label: "AutoComplete",
+        label: "Autocomplete",
         placeholder: "e.g. email",
       },
-      { key: "maxLength", kind: "number", label: "Max Length" },
-      { key: "minLength", kind: "number", label: "Min Length" },
+      { key: "maxLength", kind: "number", label: "Maximum length" },
+      { key: "minLength", kind: "number", label: "Minimum length" },
+      {
+        key: "pattern",
+        kind: "text",
+        label: "Pattern",
+        placeholder: "^[A-Za-z]+$",
+      },
     ],
     defaults: () => ({}),
     icon: "TypeIcon",
     label: "Text",
     type: "text",
-    validation: ["required", "min", "max", "pattern"],
   },
   textarea: {
     attributes: [
       {
         key: "autoComplete",
         kind: "text",
-        label: "AutoComplete",
+        label: "Autocomplete",
         placeholder: "e.g. email",
       },
-      { key: "maxLength", kind: "number", label: "Max Length" },
-      { key: "minLength", kind: "number", label: "Min Length" },
+      { key: "maxLength", kind: "number", label: "Maximum length" },
+      { key: "minLength", kind: "number", label: "Minimum length" },
     ],
     defaults: () => ({}),
     icon: "AlignLeftIcon",
     label: "Textarea",
     type: "textarea",
-    validation: ["required", "min", "max"],
   },
   time: {
     attributes: [],
@@ -230,7 +231,6 @@ const FIELD_REGISTRY: {
     icon: "ClockIcon",
     label: "Time",
     type: "time",
-    validation: ["required"],
   },
   toggle: {
     attributes: [],
@@ -238,24 +238,28 @@ const FIELD_REGISTRY: {
     icon: "ToggleLeftIcon",
     label: "Toggle",
     type: "toggle",
-    validation: ["required"],
   },
   url: {
     attributes: [
       {
         key: "autoComplete",
         kind: "text",
-        label: "AutoComplete",
+        label: "Autocomplete",
         placeholder: "e.g. email",
       },
-      { key: "maxLength", kind: "number", label: "Max Length" },
-      { key: "minLength", kind: "number", label: "Min Length" },
+      { key: "maxLength", kind: "number", label: "Maximum length" },
+      { key: "minLength", kind: "number", label: "Minimum length" },
+      {
+        key: "pattern",
+        kind: "text",
+        label: "Pattern",
+        placeholder: "^[A-Za-z]+$",
+      },
     ],
     defaults: () => ({}),
     icon: "LinkIcon",
     label: "URL",
     type: "url",
-    validation: ["required", "pattern"],
   },
 };
 
@@ -270,23 +274,8 @@ export const CONDITION_OPERATORS: {
   { label: "Is empty", value: "empty" },
 ];
 
-export const VALIDATION_LABELS: Record<ValidationRuleType, string> = {
-  custom: "Custom",
-  email: "Email Format",
-  max: "Max Length",
-  min: "Min Length",
-  pattern: "Regex Pattern",
-  required: "Required",
-};
-
 export const FIELD_TYPE_LIST = Object.values(FIELD_REGISTRY);
 
 export const getFieldEntry = <Type extends FieldType>(
   type: Type,
 ): FieldRegistryEntry<Type> => FIELD_REGISTRY[type];
-
-export const hasAttribute = (
-  type: FieldType,
-  key: { [Type in FieldType]: AttributeEditorMeta<Type>["key"] }[FieldType],
-): boolean =>
-  FIELD_REGISTRY[type].attributes.some((editor) => editor.key === key);
