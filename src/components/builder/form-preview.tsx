@@ -771,10 +771,7 @@ export function FormPreview({ definition }: { definition: FormDefinition }) {
                   {steps[currentStep]?.attributes.previousLabel ?? "Back"}
                 </Button>
               )}
-              <Button
-                className="flex-1 gap-1.5 shadow-glow transition-shadow hover:shadow-glow-strong"
-                onClick={handleNext}
-              >
+              <Button className="flex-1 gap-1.5" onClick={handleNext}>
                 {isLastStep ? (
                   (steps[currentStep]?.attributes.nextLabel ?? "Submit")
                 ) : (

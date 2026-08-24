@@ -36,8 +36,6 @@ const newSectionId = () => randomId("sec");
 
 const newStepId = () => randomId("st");
 
-const newFormId = () => randomId("frm");
-
 const createSection = (
   fields: AnyFieldDefinition[] = [],
 ): SectionDefinition => ({
@@ -56,8 +54,16 @@ const createStepDefinition = (): StepDefinition => {
 };
 
 export const createDefaultDefinition = (): FormDefinition => ({
-  id: newFormId(),
-  steps: [createStepDefinition()],
+  // Deterministic ids keep the prerendered scaffold identical on the server
+  // and client; anything added through the builder gets random ids instead.
+  id: "frm_seed",
+  steps: [
+    {
+      attributes: {},
+      id: "st_seed",
+      sections: [{ attributes: {}, fields: [], id: "sec_seed" }],
+    },
+  ],
   version: FORM_DEFINITION_VERSION,
 });
 

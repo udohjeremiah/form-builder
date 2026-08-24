@@ -63,7 +63,8 @@ const DraggableField = ({
 }) => {
   const { isDragging, ref } = useDraggable({
     data: { type },
-    id: `palette-${type}`,
+    id: `palette-${label}`,
+    type: "palette",
   });
 
   const Icon = iconMap[icon];
@@ -140,7 +141,7 @@ export function FieldPalette({
       )}
     >
       <div className="px-4 pt-4 pb-2">
-        <h3 className="text-[11px] font-semibold tracking-widest text-muted-foreground/60 uppercase">
+        <h3 className="text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
           Components
         </h3>
         {isTapMode && (
@@ -165,7 +166,7 @@ export function FieldPalette({
       {!isTapMode && (
         <>
           <Separator />
-          <div className="flex items-center justify-center gap-2 p-3 text-muted-foreground/50">
+          <div className="flex items-center justify-center gap-2 p-3 text-muted-foreground">
             <HandGrabIcon className="size-4" />
             <p className="text-center font-mono text-[10px]">Drag to canvas</p>
           </div>

@@ -3,10 +3,6 @@
 import { useDroppable } from "@dnd-kit/react";
 import { useSortable } from "@dnd-kit/react/sortable";
 import {
-  ChevronDownIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  ChevronUpIcon,
   CopyIcon,
   EyeIcon,
   GripVerticalIcon,
@@ -34,14 +30,11 @@ const plural = (count: number, noun: string) =>
   `${count} ${noun}${count === 1 ? "" : "s"}`;
 
 const SectionCard = ({
-  canMoveDown,
-  canMoveUp,
   canRemove,
   entry,
   index,
   isSelected,
   onDuplicate,
-  onMove,
   onRemove,
   onRemoveSection,
   onSelect,
@@ -49,14 +42,11 @@ const SectionCard = ({
   selectedFieldId,
   startIndex,
 }: {
-  canMoveDown: boolean;
-  canMoveUp: boolean;
   canRemove: boolean;
   entry: CanvasSection;
   index: number;
   isSelected: boolean;
   onDuplicate: (id: string) => void;
-  onMove: (delta: -1 | 1) => void;
   onRemove: (id: string) => void;
   onRemoveSection: (id: string) => void;
   onSelect: (id: string) => void;
@@ -65,25 +55,45 @@ const SectionCard = ({
   startIndex: number;
 }) => {
   // The section body is itself a drop target so fields can be dropped into
-  // empty areas of another section, not only onto existing fields.
-  const { isDropTarget, ref } = useDroppable({ id: entry.section.id });
+  // empty areas of another section, not only onto existing fields. It only
+  // accepts palette items and fields; section drags target sibling cards.
+  const { isDropTarget, ref } = useDroppable({
+    accept: ["field", "palette"],
+    id: entry.section.id,
+  });
+
+  const {
+    handleRef,
+    isDragging,
+    ref: sortableRef,
+  } = useSortable({
+    accept: "section",
+    group: "sections",
+    id: `section:${entry.section.id}`,
+    index,
+    type: "section",
+  });
 
   return (
     <div
       className={cn(
         "overflow-hidden rounded-xl border",
         isSelected ? "border-primary/40 shadow-sm" : "border-border/70",
+        isDropTarget && !isSelected && "border-primary/40",
+        isDragging && "z-50 opacity-40",
       )}
       onClick={() => {
         onSelectSection(entry.section.id);
       }}
+      ref={sortableRef}
     >
       <Button
-        className="group/header w-full rounded-none border-0 border-b border-dashed border-border"
+        className="group/header w-full cursor-grab rounded-none border-0 border-b border-border/70 active:cursor-grabbing"
         onClick={(event) => {
           event.stopPropagation();
           onSelectSection(entry.section.id);
         }}
+        ref={handleRef}
         variant={isSelected ? "secondary" : "ghost"}
       >
         <span
@@ -105,31 +115,9 @@ const SectionCard = ({
         >
           {entry.section.attributes.title ?? `Section ${index + 1}`}
         </span>
-        {canMoveUp && (
-          <span
-            className="shrink-0 opacity-0 transition-all group-hover/header:opacity-100 hover:text-foreground"
-            onClick={(event) => {
-              event.stopPropagation();
-              onMove(-1);
-            }}
-          >
-            <ChevronUpIcon className="size-3" />
-          </span>
-        )}
-        {canMoveDown && (
-          <span
-            className="shrink-0 opacity-0 transition-all group-hover/header:opacity-100 hover:text-foreground"
-            onClick={(event) => {
-              event.stopPropagation();
-              onMove(1);
-            }}
-          >
-            <ChevronDownIcon className="size-3" />
-          </span>
-        )}
         {canRemove && (
           <span
-            className="shrink-0 opacity-0 transition-all group-hover/header:opacity-100 hover:text-destructive"
+            className="-m-1 shrink-0 rounded-sm p-1 opacity-40 transition-opacity group-hover/header:opacity-100 hover:text-destructive active:bg-accent"
             onClick={(event) => {
               event.stopPropagation();
               onRemoveSection(entry.section.id);
@@ -185,7 +173,12 @@ const SortableField = ({
   onRemove: (id: string) => void;
   onSelect: (id: string) => void;
 }) => {
-  const { isDragging, ref } = useSortable({ id: field.id, index });
+  const { isDragging, ref } = useSortable({
+    accept: "field",
+    id: field.id,
+    index,
+    type: "field",
+  });
 
   return (
     <div
@@ -258,13 +251,78 @@ const SortableField = ({
   );
 };
 
+const SortableStepTab = ({
+  index,
+  isActive,
+  multiStepEnabled,
+  onRemoveStep,
+  onSelectStep,
+  onStepChange,
+  step,
+}: {
+  index: number;
+  isActive: boolean;
+  multiStepEnabled: boolean;
+  onRemoveStep: (index: number) => void;
+  onSelectStep: (id: string) => void;
+  onStepChange: (index: number) => void;
+  step: StepDefinition;
+}) => {
+  const { isDragging, ref } = useSortable({
+    accept: "step",
+    disabled: !multiStepEnabled,
+    group: "steps",
+    id: `step:${step.id}`,
+    index,
+    type: "step",
+  });
+
+  return (
+    <Button
+      className={cn("group max-w-44 min-w-0", isDragging && "z-50 opacity-40")}
+      onClick={() => {
+        onStepChange(index);
+        onSelectStep(step.id);
+      }}
+      ref={ref}
+      variant={isActive ? "secondary" : "outline"}
+    >
+      <span
+        className={cn(
+          "flex size-5 shrink-0 items-center justify-center rounded-full border text-[10px] font-bold",
+          isActive ? "border-primary/40 bg-primary/10" : "border-border",
+        )}
+      >
+        {index + 1}
+      </span>
+      <span
+        className={cn(
+          "min-w-0 truncate",
+          !step.attributes.title && "text-muted-foreground/40 italic",
+        )}
+      >
+        {step.attributes.title ?? `Step ${index + 1}`}
+      </span>
+      {multiStepEnabled && (
+        <span
+          className="-m-1 shrink-0 rounded-sm p-1 opacity-40 transition-opacity group-hover:opacity-100 hover:text-destructive active:bg-accent"
+          onClick={(event) => {
+            event.stopPropagation();
+            onRemoveStep(index);
+          }}
+        >
+          <XIcon className="size-3" />
+        </span>
+      )}
+    </Button>
+  );
+};
+
 export function FormCanvas({
   activeStepIndex,
   onAddSection,
   onAddStep,
   onDuplicate,
-  onMoveSection,
-  onMoveStep,
   onRemove,
   onRemoveSection,
   onRemoveStep,
@@ -281,12 +339,6 @@ export function FormCanvas({
   onAddSection: () => void;
   onAddStep: () => void;
   onDuplicate: (id: string) => void;
-  onMoveSection: (
-    stepIndex: number,
-    fromIndex: number,
-    toIndex: number,
-  ) => void;
-  onMoveStep: (fromIndex: number, toIndex: number) => void;
   onRemove: (id: string) => void;
   onRemoveSection: (id: string) => void;
   onRemoveStep: (index: number) => void;
@@ -302,8 +354,6 @@ export function FormCanvas({
   // Multi-step is derived from the model; a lone step renders as one quiet
   // tab chip that still selects the step for attribute editing.
   const multiStepEnabled = steps.length > 1;
-
-  const { isDropTarget, ref } = useDroppable({ id: "canvas" });
 
   const totalFields = sections.reduce(
     (sum, entry) => sum + entry.section.fields.length,
@@ -328,64 +378,17 @@ export function FormCanvas({
     );
   }
 
-  // Each rendered section also needs its position within its own step so
-  // reorder arrows know their edges.
-  const nextPositionByStep = new Map<number, number>();
-  const positionBySectionId = new Map<
-    string,
-    { count: number; index: number }
-  >();
-  for (const entry of sections) {
-    const index = nextPositionByStep.get(entry.stepIndex) ?? 0;
-    positionBySectionId.set(entry.section.id, {
-      count: sectionCountsByStep.get(entry.stepIndex) ?? 0,
-      index,
-    });
-    nextPositionByStep.set(entry.stepIndex, index + 1);
-  }
-
-  const emptyHero = (
-    <div className="flex h-full flex-col items-center justify-center text-center">
-      <div className="mb-3 flex size-14 items-center justify-center rounded-2xl border border-dashed border-border/80">
-        <PlusIcon className="size-5 text-muted-foreground/30" />
-      </div>
-      <p className="text-sm font-medium text-muted-foreground/50">
-        Drop fields here
-      </p>
-      {multiStepEnabled && (
-        <p className="mt-1 text-[11px] text-muted-foreground/30">
-          Adding to{" "}
-          {steps[activeStepIndex]?.attributes.title ??
-            `Step ${activeStepIndex + 1}`}
-        </p>
-      )}
-    </div>
-  );
-
   const sectionCards = (
-    <div className="mx-auto max-w-lg space-y-3">
+    <div className="mx-auto max-w-lg space-y-5">
       {sections.map((entry, sectionIndex) => {
-        const position = positionBySectionId.get(entry.section.id) ?? {
-          count: 0,
-          index: 0,
-        };
         return (
           <SectionCard
-            canMoveDown={position.index < position.count - 1}
-            canMoveUp={position.index > 0}
             canRemove={(sectionCountsByStep.get(entry.stepIndex) ?? 0) > 1}
             entry={entry}
             index={sectionIndex}
             isSelected={selectedSectionId === entry.section.id}
             key={entry.section.id}
             onDuplicate={onDuplicate}
-            onMove={(delta) => {
-              onMoveSection(
-                entry.stepIndex,
-                position.index,
-                position.index + delta,
-              );
-            }}
             onRemove={onRemove}
             onRemoveSection={onRemoveSection}
             onSelect={onSelect}
@@ -395,41 +398,34 @@ export function FormCanvas({
           />
         );
       })}
-      <button
-        className="w-full rounded-xl border border-dashed border-border/60 py-3 text-xs font-medium text-muted-foreground/40 transition-colors hover:border-primary/40 hover:text-primary"
+      <Button
+        className="w-full border-dashed text-xs"
         onClick={(event) => {
           event.stopPropagation();
           onAddSection();
         }}
-        type="button"
+        variant="outline"
       >
-        + Add section
-      </button>
+        <PlusIcon className="size-3.5" />
+        Add section
+      </Button>
     </div>
   );
 
-  // Only the pristine default scaffold (one seeded step and section, no
-  // fields) collapses to an empty hero; sections always render otherwise.
-  const isPristine =
-    totalFields === 0 && sections.length <= 1 && steps.length <= 1;
-  const dropZoneContent = isPristine ? emptyHero : sectionCards;
-
-  const summaryParts = isPristine
-    ? [plural(totalFields, "field")]
-    : [
-        `step ${activeStepIndex + 1}/${steps.length}`,
-        plural(sections.length, "section"),
-        plural(totalFields, "field"),
-      ];
+  const summaryParts = [
+    `step ${activeStepIndex + 1}/${steps.length}`,
+    plural(sections.length, "section"),
+    plural(totalFields, "field"),
+  ];
 
   return (
     <div className="flex h-full min-w-0 flex-1 flex-col">
       {/* Canvas header */}
       <div className="flex items-center justify-between border-b border-border bg-background px-5 py-2.5">
-        <span className="text-[11px] font-semibold tracking-widest text-muted-foreground/60 uppercase">
+        <span className="text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
           Canvas
         </span>
-        <span className="font-mono text-[10px] text-muted-foreground/40">
+        <span className="font-mono text-[10px] text-muted-foreground">
           {summaryParts.join(" · ")}
         </span>
       </div>
@@ -437,88 +433,24 @@ export function FormCanvas({
       {/* Step tabs; a single step stays selectable through its quiet chip */}
       <div className="flex items-center gap-1 overflow-x-auto border-b border-border bg-background px-3 py-1.5">
         {steps.map((step, index) => (
-          <Button
-            className="group max-w-44 min-w-0"
+          <SortableStepTab
+            index={index}
+            isActive={activeStepIndex === index}
             key={step.id}
-            onClick={() => {
-              onStepChange(index);
-              onSelectStep(step.id);
-            }}
-            variant={activeStepIndex === index ? "secondary" : "outline"}
-          >
-            <span
-              className={cn(
-                "flex size-5 shrink-0 items-center justify-center rounded-full border text-[10px] font-bold",
-                activeStepIndex === index
-                  ? "border-primary/40 bg-primary/10"
-                  : "border-border",
-              )}
-            >
-              {index + 1}
-            </span>
-            <span
-              className={cn(
-                "min-w-0 truncate",
-                !step.attributes.title && "text-muted-foreground/40 italic",
-              )}
-            >
-              {step.attributes.title ?? `Step ${index + 1}`}
-            </span>
-            {index > 0 && multiStepEnabled && (
-              <span
-                className="shrink-0 opacity-0 transition-all group-hover:opacity-100 hover:text-foreground"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onMoveStep(index, index - 1);
-                }}
-              >
-                <ChevronLeftIcon className="size-3" />
-              </span>
-            )}
-            {index < steps.length - 1 && multiStepEnabled && (
-              <span
-                className="shrink-0 opacity-0 transition-all group-hover:opacity-100 hover:text-foreground"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onMoveStep(index, index + 1);
-                }}
-              >
-                <ChevronRightIcon className="size-3" />
-              </span>
-            )}
-            {multiStepEnabled && (
-              <span
-                className="ml-0.5 shrink-0 opacity-0 transition-all group-hover:opacity-100 hover:text-destructive"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onRemoveStep(index);
-                }}
-              >
-                <XIcon className="size-3" />
-              </span>
-            )}
-          </Button>
+            multiStepEnabled={multiStepEnabled}
+            onRemoveStep={onRemoveStep}
+            onSelectStep={onSelectStep}
+            onStepChange={onStepChange}
+            step={step}
+          />
         ))}
-        <Button
-          className="size-7 shrink-0 text-muted-foreground/40 hover:text-primary"
-          onClick={onAddStep}
-          size="icon"
-          variant="ghost"
-        >
+        <Button onClick={onAddStep} size="icon" variant="ghost">
           <PlusIcon className="size-3.5" />
         </Button>
       </div>
 
       {/* Drop zone */}
-      <div
-        className={cn(
-          "flex-1 overflow-y-auto p-5 transition-colors",
-          isDropTarget && "drop-zone-active",
-        )}
-        ref={ref}
-      >
-        {dropZoneContent}
-      </div>
+      <div className="flex-1 overflow-y-auto p-5">{sectionCards}</div>
     </div>
   );
 }

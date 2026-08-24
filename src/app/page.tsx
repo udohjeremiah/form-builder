@@ -2,6 +2,7 @@
 
 import type { DragEndEvent } from "@dnd-kit/react";
 
+import { PointerActivationConstraints, PointerSensor } from "@dnd-kit/dom";
 import { DragDropProvider, DragOverlay } from "@dnd-kit/react";
 import { isSortable } from "@dnd-kit/react/sortable";
 import {
@@ -32,6 +33,7 @@ import { FormCanvas } from "@/components/builder/form-canvas";
 import { FormPreview } from "@/components/builder/form-preview";
 import { SchemaOutput } from "@/components/builder/schema-output";
 import { StructureProperties } from "@/components/builder/structure-properties";
+import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/toast";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useUndoRedo } from "@/hooks/use-undo-redo";
@@ -69,6 +71,16 @@ type RightPanel = "preview" | "schema";
 
 const STORAGE_KEY = "form-builder-draft";
 const AUTOSAVE_DELAY = 1500;
+
+// A small distance threshold keeps plain clicks (select, delete) from being
+// swallowed by drag activation, on steps and section headers alike.
+const dragSensors = [
+  PointerSensor.configure({
+    activationConstraints: [
+      new PointerActivationConstraints.Distance({ value: 5 }),
+    ],
+  }),
+];
 
 const loadDraft = (): null | PersistedFormDefinition => {
   try {
@@ -244,9 +256,15 @@ export default function BuilderPage() {
     [isMobile, mobilePanel],
   );
 
-  const selectStep = useCallback((id: string) => {
-    setSelection({ id, kind: "step" });
-  }, []);
+  const selectStep = useCallback(
+    (id: string) => {
+      setSelection({ id, kind: "step" });
+      if (isMobile && mobilePanel === "canvas") {
+        setMobilePanel("properties");
+      }
+    },
+    [isMobile, mobilePanel],
+  );
 
   const handleMoveStep = useCallback(
     (fromIndex: number, toIndex: number) => {
@@ -302,31 +320,49 @@ export default function BuilderPage() {
         selectField(field.id);
         return;
       }
-      if (!isSortable(source)) return;
-      const fieldId = String(source.id);
 
-      // The optimistic sorting plugin physically reparents the dragged node
-      // next to the hovered target during dragover and leaves it there after
-      // a successful drop. Restore it to its React-managed container first so
-      // the upcoming state commit does not fail on a stale parent
-      // (NotFoundError: Failed to execute 'removeChild').
-      const draggedNode = document.querySelector(
-        `[data-field-id="${CSS.escape(fieldId)}"]`,
-      );
-      const homeEntry = renderedSections.find((entry) =>
-        entry.section.fields.some((field) => field.id === fieldId),
-      );
-      const homeContainer = homeEntry
-        ? document.querySelector(
-            `[data-section-fields="${CSS.escape(homeEntry.section.id)}"]`,
-          )
-        : null;
-      if (
-        draggedNode &&
-        homeContainer &&
-        !homeContainer.contains(draggedNode)
-      ) {
-        homeContainer.append(draggedNode);
+      // Step tabs and section cards sort within their own groups; their
+      // indexes map directly onto model positions.
+      const sourceId = String(source.id);
+      if (sourceId.startsWith("step:")) {
+        if (!isSortable(source) || !isSortable(target)) return;
+        const { index, initialIndex } = source;
+        if (initialIndex === index) return;
+        handleMoveStep(initialIndex, index);
+        return;
+      }
+      if (sourceId.startsWith("section:")) {
+        if (!isSortable(source) || !isSortable(target)) return;
+        const entry = renderedSections.find(
+          (item) => `section:${item.section.id}` === sourceId,
+        );
+        if (!entry) return;
+        const { index, initialIndex } = source;
+        if (initialIndex === index) return;
+        handleMoveSection(entry.stepIndex, initialIndex, index);
+        return;
+      }
+
+      if (!isSortable(source)) return;
+      const fieldId = sourceId;
+
+      // The optimistic sorting plugin physically reparents nodes (and shifts
+      // siblings between sections) while hovering. Return every field node to
+      // its React-managed container before committing state so reconciliation
+      // never touches a node living under the wrong parent (NotFoundError).
+      for (const entry of renderedSections) {
+        const container = document.querySelector(
+          `[data-section-fields="${CSS.escape(entry.section.id)}"]`,
+        );
+        if (!container) continue;
+        for (const field of entry.section.fields) {
+          const node = document.querySelector(
+            `[data-field-id="${CSS.escape(field.id)}"]`,
+          );
+          if (node && !container.contains(node)) {
+            container.append(node);
+          }
+        }
       }
 
       if (targetId !== null && droppedOnSection) {
@@ -337,17 +373,17 @@ export default function BuilderPage() {
         return;
       }
 
-      const { index, initialIndex } = source;
-      if (initialIndex === index) return;
-      // Sortable indexes refer to the flattened list of rendered sections;
-      // map both positions back to global field ids before reordering.
-      const fromId = renderedFields[initialIndex]?.id;
-      const toId = renderedFields[index]?.id;
-      if (!fromId || !toId || fromId === toId) return;
-      setFormState((previous) => moveField(previous, fromId, toId));
+      // Drop onto another field: resolve positions by id instead of sortable
+      // indexes, which drift from the rendered list once a drag crosses
+      // section boundaries.
+      if (targetId === null || targetId === fieldId) return;
+      if (!renderedFields.some((field) => field.id === targetId)) return;
+      setFormState((previous) => moveField(previous, fieldId, targetId));
     },
     [
       activeStepIndex,
+      handleMoveSection,
+      handleMoveStep,
       renderedFields,
       renderedSections,
       setFormState,
@@ -403,10 +439,13 @@ export default function BuilderPage() {
   );
 
   const handleAddStep = useCallback(() => {
-    setFormState(addStep);
-    setActiveStepIndex(steps.length);
-    setSelection(null);
-  }, [setFormState, steps.length]);
+    const next = addStep(formState);
+    setFormState(next);
+    const created = next.steps.at(-1);
+    if (!created) return;
+    setActiveStepIndex(next.steps.length - 1);
+    selectStep(created.id);
+  }, [formState, selectStep, setFormState]);
 
   const handleAddSection = useCallback(() => {
     const next = addSection(formState, activeStepIndex);
@@ -536,40 +575,31 @@ export default function BuilderPage() {
 
           {/* Undo/Redo */}
           <div className="ml-1 flex items-center gap-0.5">
-            <button
-              className={cn(
-                "rounded-md p-1 transition-colors",
-                canUndo
-                  ? "text-muted-foreground/60 hover:bg-accent hover:text-foreground"
-                  : "cursor-not-allowed text-muted-foreground/15",
-              )}
+            <Button
+              className={cn(!canUndo && "text-muted-foreground/60")}
               disabled={!canUndo}
               onClick={undo}
+              size="icon-xs"
+              variant="ghost"
             >
               <Undo2Icon className="size-3.5" />
-            </button>
-            <button
-              className={cn(
-                "rounded-md p-1 transition-colors",
-                canRedo
-                  ? "text-muted-foreground/60 hover:bg-accent hover:text-foreground"
-                  : "cursor-not-allowed text-muted-foreground/15",
-              )}
+            </Button>
+            <Button
+              className={cn(!canRedo && "text-muted-foreground/60")}
               disabled={!canRedo}
               onClick={redo}
+              size="icon-xs"
+              variant="ghost"
             >
               <Redo2Icon className="size-3.5" />
-            </button>
+            </Button>
           </div>
         </div>
 
         <div className="flex items-center gap-1 md:gap-1.5">
-          <button
-            className="rounded-md px-2 py-1 font-mono text-[11px] text-muted-foreground/40 transition-colors hover:bg-destructive/5 hover:text-destructive"
-            onClick={handleClearDraft}
-          >
+          <Button onClick={handleClearDraft} size="xs" variant="destructive">
             Clear
-          </button>
+          </Button>
 
           {/* Desktop-only: Preview/Schema toggle */}
           {!isMobile && (
@@ -633,14 +663,15 @@ export default function BuilderPage() {
                 </div>
               )}
               {mobilePanel === "canvas" && (
-                <DragDropProvider onDragEnd={handleDragEnd}>
+                <DragDropProvider
+                  onDragEnd={handleDragEnd}
+                  sensors={dragSensors}
+                >
                   <FormCanvas
                     activeStepIndex={activeStepIndex}
                     onAddSection={handleAddSection}
                     onAddStep={handleAddStep}
                     onDuplicate={handleDuplicate}
-                    onMoveSection={handleMoveSection}
-                    onMoveStep={handleMoveStep}
                     onRemove={handleRemove}
                     onRemoveSection={handleRemoveSection}
                     onRemoveStep={handleRemoveStep}
@@ -658,13 +689,40 @@ export default function BuilderPage() {
                     steps={steps}
                   />
                   <DragOverlay>
-                    {(source) =>
-                      String(source.id).startsWith("palette-") ? (
-                        <div className="rounded-lg border border-primary/30 bg-muted px-3 py-2 text-sm font-medium text-foreground shadow-glow">
-                          {String(source.id).replace("palette-", "")}
+                    {(source) => {
+                      const id = String(source.id);
+                      if (id.startsWith("palette-")) {
+                        return (
+                          <div className="rounded-lg border border-primary/30 bg-muted px-3 py-2 text-sm font-medium text-foreground">
+                            {id.replace("palette-", "")}
+                          </div>
+                        );
+                      }
+                      const stepIndex = steps.findIndex(
+                        (item) => `step:${item.id}` === id,
+                      );
+                      if (stepIndex !== -1) {
+                        return (
+                          <div className="rounded-lg border border-primary/30 bg-muted px-3 py-2 text-sm font-medium text-foreground">
+                            {steps[stepIndex]?.attributes.title ??
+                              `Step ${stepIndex + 1}`}
+                          </div>
+                        );
+                      }
+                      const entry = renderedSections.find(
+                        (item) => `section:${item.section.id}` === id,
+                      );
+                      if (!entry) return null;
+                      const sectionIndex = renderedSections
+                        .filter((item) => item.stepIndex === entry.stepIndex)
+                        .indexOf(entry);
+                      return (
+                        <div className="rounded-lg border border-primary/30 bg-muted px-3 py-2 text-sm font-medium text-foreground">
+                          {entry.section.attributes.title ??
+                            `Section ${sectionIndex + 1}`}
                         </div>
-                      ) : null
-                    }
+                      );
+                    }}
                   </DragOverlay>
                 </DragDropProvider>
               )}
@@ -745,15 +803,13 @@ export default function BuilderPage() {
       ) : (
         /* ─── Desktop layout: side-by-side panels ─── */
         <div className="flex flex-1 overflow-hidden">
-          <DragDropProvider onDragEnd={handleDragEnd}>
+          <DragDropProvider onDragEnd={handleDragEnd} sensors={dragSensors}>
             <FieldPalette />
             <FormCanvas
               activeStepIndex={activeStepIndex}
               onAddSection={handleAddSection}
               onAddStep={handleAddStep}
               onDuplicate={handleDuplicate}
-              onMoveSection={handleMoveSection}
-              onMoveStep={handleMoveStep}
               onRemove={handleRemove}
               onRemoveSection={handleRemoveSection}
               onRemoveStep={handleRemoveStep}
@@ -769,13 +825,40 @@ export default function BuilderPage() {
               steps={steps}
             />
             <DragOverlay>
-              {(source) =>
-                String(source.id).startsWith("palette-") ? (
-                  <div className="rounded-lg border border-primary/30 bg-muted px-3 py-2 text-sm font-medium text-foreground shadow-glow">
-                    {String(source.id).replace("palette-", "")}
+              {(source) => {
+                const id = String(source.id);
+                if (id.startsWith("palette-")) {
+                  return (
+                    <div className="rounded-lg border border-primary/30 bg-muted px-3 py-2 text-sm font-medium text-foreground">
+                      {id.replace("palette-", "")}
+                    </div>
+                  );
+                }
+                const stepIndex = steps.findIndex(
+                  (item) => `step:${item.id}` === id,
+                );
+                if (stepIndex !== -1) {
+                  return (
+                    <div className="rounded-lg border border-primary/30 bg-muted px-3 py-2 text-sm font-medium text-foreground">
+                      {steps[stepIndex]?.attributes.title ??
+                        `Step ${stepIndex + 1}`}
+                    </div>
+                  );
+                }
+                const entry = renderedSections.find(
+                  (item) => `section:${item.section.id}` === id,
+                );
+                if (!entry) return null;
+                const sectionIndex = renderedSections
+                  .filter((item) => item.stepIndex === entry.stepIndex)
+                  .indexOf(entry);
+                return (
+                  <div className="rounded-lg border border-primary/30 bg-muted px-3 py-2 text-sm font-medium text-foreground">
+                    {entry.section.attributes.title ??
+                      `Section ${sectionIndex + 1}`}
                   </div>
-                ) : null
-              }
+                );
+              }}
             </DragOverlay>
           </DragDropProvider>
 

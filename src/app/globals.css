@@ -116,10 +116,6 @@
   --radius-3xl: calc(var(--radius) + 12px);
   --radius-4xl: calc(var(--radius) + 16px);
   --font-heading: var(--font-sans);
-  --shadow-glow:
-    0 0 30px hsl(217 91% 60% / 0.12), 0 0 60px hsl(217 91% 60% / 0.06);
-  --shadow-glow-strong:
-    0 0 40px hsl(217 91% 60% / 0.2), 0 0 80px hsl(217 91% 60% / 0.08);
 }
 
 @layer base {
@@ -139,10 +135,5 @@
 @layer utilities {
   .drag-field {
     @apply cursor-grab active:cursor-grabbing;
-  }
-
-  .drop-zone-active {
-    @apply border-primary/40 bg-primary/5;
-    box-shadow: inset 0 0 40px hsl(217 91% 60% / 0.04);
   }
 }
