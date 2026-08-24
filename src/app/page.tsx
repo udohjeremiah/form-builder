@@ -5,10 +5,10 @@ import type { DragEndEvent } from "@dnd-kit/react";
 import { DragDropProvider, DragOverlay } from "@dnd-kit/react";
 import { isSortable } from "@dnd-kit/react/sortable";
 import {
+  CircleCheckIcon,
   Code2Icon,
   Columns3Icon,
   EyeIcon,
-  LayersIcon,
   PanelLeftIcon,
   Redo2Icon,
   Settings2Icon,
@@ -32,7 +32,6 @@ import { FormCanvas } from "@/components/builder/form-canvas";
 import { FormPreview } from "@/components/builder/form-preview";
 import { SchemaOutput } from "@/components/builder/schema-output";
 import { StructureProperties } from "@/components/builder/structure-properties";
-import { Separator } from "@/components/ui/separator";
 import { toast } from "@/components/ui/toast";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useUndoRedo } from "@/hooks/use-undo-redo";
@@ -116,7 +115,6 @@ export default function BuilderPage() {
   const [activeStepIndex, setActiveStepIndex] = useState(0);
   const [selection, setSelection] = useState<BuilderSelection | null>(null);
   const [rightPanel, setRightPanel] = useState<RightPanel>("preview");
-  const [saveStatus, setSaveStatus] = useState<"idle" | "saved">("idle");
   const [mobilePanel, setMobilePanel] = useState<MobilePanel>("canvas");
 
   useEffect(() => {
@@ -147,10 +145,6 @@ export default function BuilderPage() {
     clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
       saveDraft({ ...formState, savedAt: Date.now() });
-      setSaveStatus("saved");
-      setTimeout(() => {
-        setSaveStatus("idle");
-      }, 2000);
     }, AUTOSAVE_DELAY);
     return () => {
       clearTimeout(saveTimer.current);
@@ -466,6 +460,16 @@ export default function BuilderPage() {
     toast.add({ description: "Started fresh.", title: "Draft cleared" });
   }, [resetHistory]);
 
+  const canComplete = allFields.length > 0;
+
+  const handleComplete = useCallback(() => {
+    if (!canComplete) return;
+    toast.add({
+      description: "Your form is ready.",
+      title: "Form complete",
+    });
+  }, [canComplete]);
+
   const handleTapAdd = useCallback(
     (type: FieldType) => {
       const field = newField(type);
@@ -526,36 +530,9 @@ export default function BuilderPage() {
       {/* Header */}
       <header className="flex h-11 shrink-0 items-center justify-between border-b border-border bg-background px-2 md:px-3">
         <div className="flex items-center gap-1.5 md:gap-2">
-          <div className="flex items-center gap-1.5">
-            <LayersIcon className="size-3.5 text-primary" />
-            <span className="font-mono text-[13px] font-semibold text-foreground">
-              form-builder
-            </span>
-          </div>
-
-          <Separator className="hidden h-4 md:block" orientation="vertical" />
-
-          {/* Save indicator */}
-          <div className="flex items-center gap-1">
-            <div
-              className={cn(
-                "size-1.5 rounded-full transition-colors",
-                saveStatus === "saved"
-                  ? "bg-primary"
-                  : "bg-muted-foreground/20",
-              )}
-            />
-            <span
-              className={cn(
-                "hidden font-mono text-[10px] transition-colors sm:inline",
-                saveStatus === "saved"
-                  ? "text-primary/70"
-                  : "text-muted-foreground/30",
-              )}
-            >
-              {saveStatus === "saved" ? "saved" : ""}
-            </span>
-          </div>
+          <span className="font-mono text-[13px] font-semibold text-foreground">
+            form-builder
+          </span>
 
           {/* Undo/Redo */}
           <div className="ml-1 flex items-center gap-0.5">
@@ -596,40 +573,48 @@ export default function BuilderPage() {
 
           {/* Desktop-only: Preview/Schema toggle */}
           {!isMobile && (
-            <>
-              <Separator className="h-4" orientation="vertical" />
-              <div className="flex items-center rounded-lg bg-muted/50 p-0.5">
-                {[
-                  {
-                    icon: EyeIcon,
-                    key: "preview" as RightPanel,
-                    label: "Preview",
-                  },
-                  {
-                    icon: Code2Icon,
-                    key: "schema" as RightPanel,
-                    label: "Schema",
-                  },
-                ].map(({ icon: Icon, key, label }) => (
-                  <button
-                    className={cn(
-                      "flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-medium transition-all",
-                      rightPanel === key
-                        ? "bg-background text-foreground shadow-sm"
-                        : "text-muted-foreground/50 hover:text-foreground",
-                    )}
-                    key={key}
-                    onClick={() => {
-                      setRightPanel(key);
-                    }}
-                  >
-                    <Icon className="size-3.5" />
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </>
+            <div className="flex items-center rounded-lg bg-muted/50 p-0.5">
+              {[
+                {
+                  icon: EyeIcon,
+                  key: "preview" as RightPanel,
+                  label: "Preview",
+                },
+                {
+                  icon: Code2Icon,
+                  key: "schema" as RightPanel,
+                  label: "Schema",
+                },
+              ].map(({ icon: Icon, key, label }) => (
+                <button
+                  className={cn(
+                    "flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-medium transition-all",
+                    rightPanel === key
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground/50 hover:text-foreground",
+                  )}
+                  key={key}
+                  onClick={() => {
+                    setRightPanel(key);
+                  }}
+                >
+                  <Icon className="size-3.5" />
+                  {label}
+                </button>
+              ))}
+            </div>
           )}
+
+          {/* Done */}
+          <button
+            className="flex items-center gap-1 rounded-md bg-primary px-2 py-1 font-mono text-[11px] text-primary-foreground transition-opacity hover:opacity-90 disabled:pointer-events-none disabled:opacity-40"
+            disabled={!canComplete}
+            onClick={handleComplete}
+            title={canComplete ? undefined : "Add at least one field"}
+          >
+            <CircleCheckIcon className="size-3" />
+            Done
+          </button>
         </div>
       </header>
 

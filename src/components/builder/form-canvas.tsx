@@ -417,7 +417,7 @@ export function FormCanvas({
   const summaryParts = isPristine
     ? [plural(totalFields, "field")]
     : [
-        plural(steps.length, "step"),
+        `step ${activeStepIndex + 1}/${steps.length}`,
         plural(sections.length, "section"),
         plural(totalFields, "field"),
       ];
