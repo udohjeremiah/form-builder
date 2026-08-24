@@ -77,7 +77,7 @@ const SectionCard = ({
   return (
     <div
       className={cn(
-        "overflow-hidden rounded-xl border",
+        "overflow-hidden rounded-xl border select-none",
         isSelected ? "border-primary/40 shadow-sm" : "border-border/70",
         isDropTarget && !isSelected && "border-primary/40",
         isDragging && "z-50 opacity-40",
@@ -183,7 +183,7 @@ const SortableField = ({
   return (
     <div
       className={cn(
-        "group flex cursor-pointer items-center gap-3 rounded-lg border p-3",
+        "group flex cursor-pointer items-center gap-3 rounded-lg border p-3 select-none",
         isSelected
           ? "border-primary/40 bg-primary/6 shadow-[0_0_0_1px_hsl(217_91%_60%/0.1)]"
           : "border-border/60 bg-muted/50 hover:border-border hover:bg-accent",
@@ -279,7 +279,10 @@ const SortableStepTab = ({
 
   return (
     <Button
-      className={cn("group max-w-44 min-w-0", isDragging && "z-50 opacity-40")}
+      className={cn(
+        "group max-w-44 min-w-0 select-none",
+        isDragging && "z-50 opacity-40",
+      )}
       onClick={() => {
         onStepChange(index);
         onSelectStep(step.id);

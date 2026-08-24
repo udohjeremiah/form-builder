@@ -72,13 +72,20 @@ type RightPanel = "preview" | "schema";
 const STORAGE_KEY = "form-builder-draft";
 const AUTOSAVE_DELAY = 1500;
 
-// A small distance threshold keeps plain clicks (select, delete) from being
-// swallowed by drag activation, on steps and section headers alike.
+// Mouse drags need a small distance threshold so plain clicks (select,
+// delete) are not swallowed by drag activation; touch and pen use a
+// deliberate long-press instead, leaving native scrolling untouched until
+// the drag engages.
 const dragSensors = [
   PointerSensor.configure({
-    activationConstraints: [
-      new PointerActivationConstraints.Distance({ value: 5 }),
-    ],
+    activationConstraints(event) {
+      if (event.pointerType === "mouse") {
+        return [new PointerActivationConstraints.Distance({ value: 5 })];
+      }
+      return [
+        new PointerActivationConstraints.Delay({ tolerance: 5, value: 250 }),
+      ];
+    },
   }),
 ];
 
