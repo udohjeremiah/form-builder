@@ -1,8 +1,6 @@
 import { ThemeProvider } from "@teispace/next-themes";
 import { Geist, Geist_Mono } from "next/font/google";
 
-import { Toaster } from "@/components/ui/toast";
-
 import "./globals.css";
 import { cn } from "@/lib/cn";
 
@@ -33,7 +31,6 @@ export default function RootLayout({
         <ThemeProvider attribute="class" disableTransitionOnChange={true}>
           {children}
         </ThemeProvider>
-        <Toaster />
       </body>
     </html>
   );

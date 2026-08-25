@@ -7,7 +7,7 @@ import type {
 
 interface AttributeEditorMeta<Type extends FieldType = FieldType> {
   key: Exclude<keyof FieldAttributesByType[Type], keyof BaseFieldAttributes>;
-  kind: "boolean" | "csv" | "lines" | "number" | "text";
+  kind: "boolean" | "lines" | "number" | "text";
   label: string;
   placeholder?: string;
 }
@@ -71,9 +71,9 @@ const FIELD_REGISTRY: {
     attributes: [
       {
         key: "accept",
-        kind: "csv",
+        kind: "lines",
         label: "Accepted file types",
-        placeholder: ".pdf, .png",
+        placeholder: "One per line",
       },
       { key: "maxSize", kind: "number", label: "Maximum file size" },
       { key: "multiple", kind: "boolean", label: "Multiple" },

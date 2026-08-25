@@ -137,7 +137,7 @@ export function FieldPalette({
     <div
       className={cn(
         fullWidth ? "w-full" : "w-56",
-        "flex h-full flex-col border-r border-border bg-background",
+        "flex h-full shrink-0 flex-col border-r border-border bg-background",
       )}
     >
       <div className="px-4 pt-4 pb-2">

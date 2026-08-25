@@ -34,7 +34,13 @@ import { FormPreview } from "@/components/builder/form-preview";
 import { SchemaOutput } from "@/components/builder/schema-output";
 import { StructureProperties } from "@/components/builder/structure-properties";
 import { Button } from "@/components/ui/button";
-import { toast } from "@/components/ui/toast";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useUndoRedo } from "@/hooks/use-undo-redo";
 import { cn } from "@/lib/cn";
@@ -140,18 +146,6 @@ export default function BuilderPage() {
     const initialDraft = loadDraft();
     if (!initialDraft) return;
     resetHistory(initialDraft);
-    const ago = Date.now() - initialDraft.savedAt;
-    let agoText = "just now";
-    if (ago >= 3_600_000) {
-      agoText = `${Math.floor(ago / 3_600_000)}h ago`;
-    } else if (ago >= 60_000) {
-      agoText = `${Math.floor(ago / 60_000)}m ago`;
-    }
-    const fieldTotal = getAllFields(initialDraft).length;
-    toast.add({
-      description: `${fieldTotal} field${fieldTotal === 1 ? "" : "s"} recovered (${agoText}).`,
-      title: "Draft restored",
-    });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const saveTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -503,17 +497,12 @@ export default function BuilderPage() {
     resetHistory(createDefaultDefinition());
     setActiveStepIndex(0);
     setSelection(null);
-    toast.add({ description: "Started fresh.", title: "Draft cleared" });
   }, [resetHistory]);
 
   const canComplete = allFields.length > 0;
 
   const handleComplete = useCallback(() => {
     if (!canComplete) return;
-    toast.add({
-      description: "Your form is ready.",
-      title: "Form complete",
-    });
   }, [canComplete]);
 
   const handleTapAdd = useCallback(
@@ -522,10 +511,6 @@ export default function BuilderPage() {
       setFormState((previous) => appendField(previous, activeStepIndex, field));
       selectField(field.id);
       setMobilePanel("canvas");
-      toast.add({
-        description: "Tap to edit properties.",
-        title: `${field.attributes.label} added`,
-      });
     },
     [activeStepIndex, setFormState, selectField],
   );
@@ -608,38 +593,60 @@ export default function BuilderPage() {
             Clear
           </Button>
 
-          {/* Desktop-only: Preview/Schema toggle */}
+          {/* Desktop-only: Preview sheet */}
           {!isMobile && (
-            <div className="flex items-center rounded-lg bg-muted/50 p-0.5">
-              {[
-                {
-                  icon: EyeIcon,
-                  key: "preview" as RightPanel,
-                  label: "Preview",
-                },
-                {
-                  icon: Code2Icon,
-                  key: "schema" as RightPanel,
-                  label: "Schema",
-                },
-              ].map(({ icon: Icon, key, label }) => (
-                <button
-                  className={cn(
-                    "flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-medium transition-all",
-                    rightPanel === key
-                      ? "bg-background text-foreground shadow-sm"
-                      : "text-muted-foreground/50 hover:text-foreground",
+            <Sheet>
+              <SheetTrigger
+                render={
+                  <Button size="xs" variant="outline">
+                    <EyeIcon className="size-3.5" />
+                    Preview
+                  </Button>
+                }
+              />
+              <SheetContent className="flex flex-col p-0" side="right">
+                <SheetHeader className="border-b px-4 py-3">
+                  <SheetTitle>Preview</SheetTitle>
+                  <div className="flex w-fit items-center rounded-lg bg-muted/50 p-0.5">
+                    {[
+                      {
+                        icon: EyeIcon,
+                        key: "preview" as RightPanel,
+                        label: "UI",
+                      },
+                      {
+                        icon: Code2Icon,
+                        key: "schema" as RightPanel,
+                        label: "Schema",
+                      },
+                    ].map(({ icon: Icon, key, label }) => (
+                      <button
+                        className={cn(
+                          "flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-medium transition-all",
+                          rightPanel === key
+                            ? "bg-background text-foreground shadow-sm"
+                            : "text-muted-foreground/50 hover:text-foreground",
+                        )}
+                        key={key}
+                        onClick={() => {
+                          setRightPanel(key);
+                        }}
+                      >
+                        <Icon className="size-3.5" />
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </SheetHeader>
+                <div className="flex-1 overflow-hidden">
+                  {rightPanel === "schema" ? (
+                    <SchemaOutput definition={formState} />
+                  ) : (
+                    <FormPreview definition={formState} />
                   )}
-                  key={key}
-                  onClick={() => {
-                    setRightPanel(key);
-                  }}
-                >
-                  <Icon className="size-3.5" />
-                  {label}
-                </button>
-              ))}
-            </div>
+                </div>
+              </SheetContent>
+            </Sheet>
           )}
 
           {/* Done */}
@@ -870,16 +877,6 @@ export default function BuilderPage() {
           </DragDropProvider>
 
           {renderProperties()}
-
-          <div className="flex w-90 min-w-0 flex-col border-l border-border bg-background">
-            <div className="flex min-h-0 flex-1 flex-col">
-              {rightPanel === "preview" ? (
-                <FormPreview definition={formState} />
-              ) : (
-                <SchemaOutput definition={formState} />
-              )}
-            </div>
-          </div>
         </div>
       )}
     </div>

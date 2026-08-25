@@ -212,7 +212,7 @@ const SortableField = ({
           )}
           {(["disable", "hide", "show"] as const).some(
             (key) => field.conditions[key]?.conditions.length,
-          ) && <EyeIcon className="size-3 shrink-0 text-accent/60" />}
+          ) && <EyeIcon className="size-3 shrink-0 text-muted-foreground" />}
         </div>
       </div>
 
@@ -373,7 +373,7 @@ export function FormCanvas({
   }
 
   const sectionCards = (
-    <div className="mx-auto max-w-lg space-y-5">
+    <div className="mx-auto space-y-5">
       {sections.map((entry, sectionIndex) => {
         return (
           <SectionCard
@@ -413,7 +413,7 @@ export function FormCanvas({
   ];
 
   return (
-    <div className="flex h-full min-w-0 flex-1 flex-col">
+    <div className="flex size-full min-w-0 flex-col md:w-[60%]">
       {/* Canvas header */}
       <div className="flex items-center justify-between border-b border-border bg-background px-5 py-2.5">
         <span className="text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
@@ -444,7 +444,7 @@ export function FormCanvas({
       </div>
 
       {/* Drop zone */}
-      <div className="flex-1 overflow-y-auto p-5">{sectionCards}</div>
+      <div className="flex-1 overflow-y-auto px-3 py-5">{sectionCards}</div>
     </div>
   );
 }

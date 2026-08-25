@@ -118,7 +118,7 @@ export function FieldProperties({
     return (
       <div
         className={cn(
-          fullWidth ? "w-full" : "w-64",
+          fullWidth ? "w-full" : "w-full min-w-0 md:w-[40%]",
           "flex items-center justify-center border-l border-border bg-background p-6",
         )}
       >
@@ -201,22 +201,23 @@ export function FieldProperties({
   return (
     <div
       className={cn(
-        fullWidth ? "w-full" : "w-64",
-        "animate-in overflow-y-auto border-l border-border bg-background p-4 duration-200 fade-in slide-in-from-right-4",
+        fullWidth ? "w-full" : "w-full min-w-0 md:w-[40%]",
+        "overflow-y-auto border-l border-border bg-background p-4",
       )}
       key={field.id}
     >
       <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-[11px] font-semibold tracking-widest text-muted-foreground/60 uppercase">
-          Properties
-        </h3>
-        <Badge
-          className="bg-primary/8 font-mono text-[9px] text-primary/70 uppercase"
-          variant="secondary"
-        >
+        <span className="truncate font-mono text-xs text-foreground/70">
+          {field.id}
+        </span>
+        <Badge className="text-[9px] uppercase" variant="secondary">
           {field.type}
         </Badge>
       </div>
+
+      <h3 className="mb-4 text-[11px] font-semibold tracking-widest text-muted-foreground/60 uppercase">
+        Properties
+      </h3>
 
       <div className="space-y-3">
         <div className="space-y-1">
@@ -278,9 +279,9 @@ export function FieldProperties({
           <>
             <Separator className="my-3" />
             <div className="mb-2 flex items-center justify-between">
-              <span className="text-[11px] font-semibold tracking-widest text-muted-foreground/60 uppercase">
+              <h3 className="text-[11px] font-semibold tracking-widest text-muted-foreground/60 uppercase">
                 Attributes
-              </span>
+              </h3>
             </div>
           </>
         )}
@@ -306,28 +307,6 @@ export function FieldProperties({
                   }}
                 />
               </div>
-            );
-          }
-
-          if (meta.kind === "csv") {
-            return (
-              <TextAttribute
-                key={meta.key}
-                label={meta.label}
-                onValueChange={(v) => {
-                  setAttributeValue(
-                    meta.key,
-                    v.trim() === ""
-                      ? undefined
-                      : v
-                          .split(",")
-                          .map((part) => part.trim())
-                          .filter(Boolean),
-                  );
-                }}
-                placeholder={meta.placeholder}
-                value={(Array.isArray(value) ? value : []).join(", ")}
-              />
             );
           }
 
@@ -381,9 +360,9 @@ export function FieldProperties({
         {/* Conditional behavior */}
         <div>
           <div className="mb-2 flex items-center justify-between">
-            <span className="text-[11px] font-semibold tracking-widest text-muted-foreground/60 uppercase">
+            <h3 className="text-[11px] font-semibold tracking-widest text-muted-foreground/60 uppercase">
               Behavior
-            </span>
+            </h3>
             {hasConditions && (
               <Badge
                 className="border-0 bg-accent/20 font-mono text-[9px] text-accent"
@@ -432,7 +411,7 @@ export function FieldProperties({
                   }}
                   value={activeEffect}
                 >
-                  <SelectTrigger className="h-7 text-xs">
+                  <SelectTrigger className="h-7 w-full text-xs">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -462,7 +441,7 @@ export function FieldProperties({
                     }}
                     value={activeGroup.combinator}
                   >
-                    <SelectTrigger className="h-7 text-xs">
+                    <SelectTrigger className="h-7 w-full text-xs">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -556,7 +535,7 @@ export function FieldProperties({
                           }}
                           value={condition.operator}
                         >
-                          <SelectTrigger className="h-7 text-xs">
+                          <SelectTrigger className="h-7 w-full text-xs">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -606,12 +585,6 @@ export function FieldProperties({
               </div>
             </>
           )}
-        </div>
-
-        <Separator className="my-3" />
-
-        <div className="truncate font-mono text-[10px] text-muted-foreground/30">
-          {field.id}
         </div>
       </div>
     </div>
