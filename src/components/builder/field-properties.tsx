@@ -58,12 +58,12 @@ const NumberAttribute = ({
   onValueChange: (value: number | undefined) => void;
   value: number | undefined;
 }) => (
-  <div className="flex items-center justify-between py-0.5">
-    <Label className="text-[10px] font-medium text-muted-foreground/60">
+  <div className="space-y-1">
+    <Label className="text-[11px] font-medium text-muted-foreground/70">
       {label}
     </Label>
     <Input
-      className="h-7 w-20 text-right font-mono text-xs"
+      className="h-8 text-[13px]"
       onChange={(event) => {
         onValueChange(parseNumberInput(event.target.value));
       }}
@@ -84,12 +84,12 @@ const TextAttribute = ({
   placeholder?: string;
   value: string;
 }) => (
-  <div className="flex items-center justify-between gap-2 py-0.5">
-    <Label className="shrink-0 text-[10px] font-medium text-muted-foreground/60">
+  <div className="space-y-1">
+    <Label className="text-[11px] font-medium text-muted-foreground/70">
       {label}
     </Label>
     <Input
-      className="h-7 min-w-0 flex-1 font-mono text-xs"
+      className="h-8 text-[13px]"
       onChange={(event) => {
         onValueChange(event.target.value);
       }}
@@ -274,6 +274,17 @@ export function FieldProperties({
           />
         </div>
 
+        {entry.attributes.length > 0 && (
+          <>
+            <Separator className="my-3" />
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-[11px] font-semibold tracking-widest text-muted-foreground/60 uppercase">
+                Attributes
+              </span>
+            </div>
+          </>
+        )}
+
         {entry.attributes.map((meta) => {
           const value = (
             field.attributes as unknown as Record<string, unknown>
@@ -365,7 +376,7 @@ export function FieldProperties({
           );
         })}
 
-        <Separator className="my-1" />
+        <Separator className="my-3" />
 
         {/* Conditional behavior */}
         <div>
@@ -597,7 +608,7 @@ export function FieldProperties({
           )}
         </div>
 
-        <Separator className="my-1" />
+        <Separator className="my-3" />
 
         <div className="truncate font-mono text-[10px] text-muted-foreground/30">
           {field.id}
