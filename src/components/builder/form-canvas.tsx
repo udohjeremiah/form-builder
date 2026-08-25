@@ -6,7 +6,6 @@ import {
   CopyIcon,
   EyeIcon,
   GripVerticalIcon,
-  PencilIcon,
   PlusIcon,
   Trash2Icon,
   XIcon,
@@ -88,7 +87,7 @@ const SectionCard = ({
       ref={sortableRef}
     >
       <Button
-        className="group/header w-full cursor-grab rounded-none border-0 border-b border-border/70 active:cursor-grabbing"
+        className="group/header w-full cursor-grab rounded-none active:cursor-grabbing"
         onClick={(event) => {
           event.stopPropagation();
           onSelectSection(entry.section.id);
@@ -130,7 +129,7 @@ const SectionCard = ({
 
       <div
         className={cn(
-          "space-y-1.5 p-2.5 transition-colors",
+          "space-y-1.5 border-t p-2.5 transition-colors",
           isDropTarget && !isSelected && "bg-primary/4",
         )}
         data-section-fields={entry.section.id}
@@ -185,7 +184,7 @@ const SortableField = ({
       className={cn(
         "group flex cursor-pointer items-center gap-3 rounded-lg border p-3 select-none",
         isSelected
-          ? "border-primary/40 bg-primary/6 shadow-[0_0_0_1px_hsl(217_91%_60%/0.1)]"
+          ? "border-primary/40 bg-primary/6 shadow-sm"
           : "border-border/60 bg-muted/50 hover:border-border hover:bg-accent",
         isDragging && "z-50 opacity-40",
       )}
@@ -197,7 +196,7 @@ const SortableField = ({
       ref={ref}
     >
       <div className="-ml-1 cursor-grab p-0.5 active:cursor-grabbing">
-        <GripVerticalIcon className="size-3.5 text-muted-foreground/30 transition-colors group-hover:text-muted-foreground/60" />
+        <GripVerticalIcon className="size-3.5 text-muted-foreground/40 transition-colors group-hover:text-muted-foreground/60" />
       </div>
 
       <div className="min-w-0 flex-1">
@@ -217,35 +216,27 @@ const SortableField = ({
         </div>
       </div>
 
-      <div className="flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-        <button
-          className="rounded-md p-1.5 text-muted-foreground/50 transition-colors hover:bg-accent hover:text-foreground"
+      <div className="-m-1 flex gap-0.5 rounded-sm p-1 opacity-40 transition-opacity group-hover:opacity-100">
+        <Button
           onClick={(event) => {
             event.stopPropagation();
             onDuplicate(field.id);
           }}
-          title="Duplicate"
+          size="icon-xs"
+          variant="outline"
         >
           <CopyIcon className="size-3" />
-        </button>
-        <button
-          className="rounded-md p-1.5 text-muted-foreground/50 transition-colors hover:bg-accent hover:text-foreground"
-          onClick={(event) => {
-            event.stopPropagation();
-            onSelect(field.id);
-          }}
-        >
-          <PencilIcon className="size-3" />
-        </button>
-        <button
-          className="rounded-md p-1.5 text-muted-foreground/50 transition-colors hover:bg-destructive/10 hover:text-destructive"
+        </Button>
+        <Button
           onClick={(event) => {
             event.stopPropagation();
             onRemove(field.id);
           }}
+          size="icon-xs"
+          variant="outline"
         >
           <Trash2Icon className="size-3" />
-        </button>
+        </Button>
       </div>
     </div>
   );

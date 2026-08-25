@@ -72,7 +72,7 @@ const DraggableField = ({
   return (
     <div
       className={cn(
-        "drag-field group flex items-center gap-2.5 rounded-lg border border-transparent bg-transparent px-3 py-2 text-sm transition-all hover:border-border hover:bg-accent",
+        "group flex cursor-grab items-center gap-2.5 rounded-lg border border-transparent bg-transparent px-3 py-2 text-sm transition-all hover:border-border hover:bg-accent active:cursor-grabbing",
         isDragging && "scale-95 opacity-40",
       )}
       ref={ref}

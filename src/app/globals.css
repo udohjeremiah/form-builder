@@ -131,9 +131,3 @@
     @apply bg-background font-sans text-foreground antialiased;
   }
 }
-
-@layer utilities {
-  .drag-field {
-    @apply cursor-grab active:cursor-grabbing;
-  }
-}
