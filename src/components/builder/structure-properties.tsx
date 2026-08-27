@@ -86,7 +86,7 @@ export function StructureProperties({
                   event.target.value === "" ? undefined : event.target.value,
               });
             }}
-            placeholder="Shown under the title..."
+            placeholder="Additional context for the user"
             rows={3}
             value={node.attributes.description ?? ""}
           />

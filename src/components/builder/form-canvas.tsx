@@ -4,6 +4,7 @@ import { useDroppable } from "@dnd-kit/react";
 import { useSortable } from "@dnd-kit/react/sortable";
 import {
   CopyIcon,
+  DotIcon,
   EyeIcon,
   GripVerticalIcon,
   PlusIcon,
@@ -208,10 +209,10 @@ const SortableField = ({
             {field.type}
           </span>
           {field.attributes.required && (
-            <span className="size-1 shrink-0 rounded-full bg-primary" />
+            <DotIcon className="text-destructive" />
           )}
           {(["disable", "hide", "show"] as const).some(
-            (key) => field.conditions[key]?.conditions.length,
+            (key) => field.logic[key]?.rules.length,
           ) && <EyeIcon className="size-3 shrink-0 text-muted-foreground" />}
         </div>
       </div>

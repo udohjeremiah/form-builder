@@ -1,9 +1,7 @@
 import type {
   AnyFieldDefinition,
   ConditionGroup,
-  ConditionOperator,
-  FieldCondition,
-  FieldConditions,
+  FieldRule,
   FieldType,
   FormDefinition,
   PersistedFormDefinition,
@@ -74,9 +72,10 @@ export const newField = (type: FieldType): AnyFieldDefinition => {
       ...entry.defaults(),
       label: entry.label,
       placeholder: `Enter ${entry.label.toLowerCase()}...`,
+      required: true,
     },
-    conditions: {},
     id: newFieldId(),
+    logic: {},
     type,
   };
 };
@@ -205,6 +204,31 @@ export const moveField = (
         const fields = ordered.slice(cursor, cursor + section.fields.length);
         cursor += section.fields.length;
         return { ...section, fields };
+      }),
+    })),
+  };
+};
+
+/** Reorders a field within a single section by local (section-relative)
+ * indexes. Used for intra-section sortable drops where dnd-kit's live index
+ * matches the optimistic visual order. */
+export const moveFieldWithinSection = (
+  definition: FormDefinition,
+  sectionId: string,
+  fromIndex: number,
+  toIndex: number,
+): FormDefinition => {
+  if (fromIndex === toIndex) return definition;
+  return {
+    ...definition,
+    steps: definition.steps.map((step) => ({
+      ...step,
+      sections: step.sections.map((section) => {
+        if (section.id !== sectionId) return section;
+        const ordered = [...section.fields];
+        const [moved] = ordered.splice(fromIndex, 1);
+        if (moved) ordered.splice(toIndex, 0, moved);
+        return { ...section, fields: ordered };
       }),
     })),
   };
@@ -397,11 +421,19 @@ const compareValues = (left: string, right: string): number => {
   return left < right ? -1 : 1;
 };
 
+/**
+ * Resolves the options that should be shown for an options-bearing field.
+ */
+export function getActiveOptions(field: AnyFieldDefinition): string[] {
+  if (field.type !== "radio" && field.type !== "select") return [];
+  return field.attributes.options ?? [];
+}
+
 export function isFieldDisabled(
   field: AnyFieldDefinition,
   values: Record<string, string>,
 ): boolean {
-  const { disable } = field.conditions;
+  const { disable } = field.logic;
   return disable ? evaluateGroup(disable, values) : false;
 }
 
@@ -409,19 +441,34 @@ export function isFieldVisible(
   field: AnyFieldDefinition,
   values: Record<string, string>,
 ): boolean {
-  const { hide, show } = field.conditions;
+  const { hide, show } = field.logic;
   if (show && !evaluateGroup(show, values)) return false;
   if (hide && evaluateGroup(hide, values)) return false;
   return true;
 }
 
-function evaluateCondition(
-  condition: FieldCondition,
+function evaluateGroup(
+  group: ConditionGroup,
   values: Record<string, string>,
 ): boolean {
-  const value = values[condition.fieldId] ?? "";
-  const expected = condition.value ?? "";
-  switch (condition.operator) {
+  if (group.rules.length === 0) return true;
+
+  // A row without a target field cannot constrain anything.
+  const passes = (rule: FieldRule) =>
+    !rule.fieldId || evaluateRule(rule, values);
+
+  return group.combinator === "any"
+    ? group.rules.some((rule) => passes(rule))
+    : group.rules.every((rule) => passes(rule));
+}
+
+function evaluateRule(
+  rule: FieldRule,
+  values: Record<string, string>,
+): boolean {
+  const value = values[rule.fieldId] ?? "";
+  const expected = rule.value ?? "";
+  switch (rule.operator) {
     case "contains": {
       return value.includes(expected);
     }
@@ -453,21 +500,6 @@ function evaluateCondition(
       return value.trim().length > 0;
     }
   }
-}
-
-function evaluateGroup(
-  group: ConditionGroup,
-  values: Record<string, string>,
-): boolean {
-  if (group.conditions.length === 0) return true;
-
-  // A row without a target field cannot constrain anything.
-  const passes = (condition: FieldCondition) =>
-    !condition.fieldId || evaluateCondition(condition, values);
-
-  return group.combinator === "any"
-    ? group.conditions.some((condition) => passes(condition))
-    : group.conditions.every((condition) => passes(condition));
 }
 
 const EMAIL_FORMAT = /^[^\s@]+@[^\s@][^\s.@]*\.[^\s@]+$/;
@@ -533,8 +565,7 @@ export function validateFieldValue(
 }
 
 /**
- * Validates persisted JSON against the current canonical structure, upgrades
- * legacy single-condition visibility entries to grouped conditions, and
+ * Validates persisted JSON against the current canonical structure and
  * normalizes `savedAt`. Returns null when the payload does not match.
  */
 export const normalizePersisted = (
@@ -546,7 +577,7 @@ export const normalizePersisted = (
   const data = raw as {
     id?: unknown;
     savedAt?: unknown;
-    steps?: { id?: unknown; sections?: unknown }[];
+    steps?: unknown;
     version?: unknown;
   };
   const savedAt = typeof data.savedAt === "number" ? data.savedAt : 0;
@@ -555,94 +586,19 @@ export const normalizePersisted = (
     data.version === FORM_DEFINITION_VERSION &&
     typeof data.id === "string" &&
     Array.isArray(data.steps) &&
-    data.steps.every(
+    (data.steps as FormDefinition["steps"]).every(
       (step) =>
         typeof step.id === "string" &&
         Array.isArray(step.sections) &&
         step.sections.length > 0,
     )
   ) {
-    const steps = (data.steps as FormDefinition["steps"]).map((step) => ({
-      ...step,
-      sections: step.sections.map((section) => ({
-        ...section,
-        fields: section.fields.map((field) => upgradeFieldConditions(field)),
-      })),
-    }));
     return {
       id: data.id,
       savedAt,
-      steps,
+      steps: data.steps as FormDefinition["steps"],
       version: FORM_DEFINITION_VERSION,
     };
   }
   return null;
-};
-
-// Older drafts stored a single flat condition per effect and spelled equality
-// operators `equals`/`not_equals`; both shapes upgrade to condition groups.
-const OPERATOR_ALIASES: Record<string, ConditionOperator> = {
-  contains: "contains",
-  empty: "empty",
-  eq: "eq",
-  equals: "eq",
-  gt: "gt",
-  gte: "gte",
-  lt: "lt",
-  lte: "lte",
-  neq: "neq",
-  not_contains: "not_contains",
-  not_empty: "not_empty",
-  not_equals: "neq",
-};
-
-const upgradeCondition = (raw: unknown): FieldCondition | null => {
-  if (typeof raw !== "object" || raw === null) return null;
-  const data = raw as {
-    fieldId?: unknown;
-    operator?: unknown;
-    value?: unknown;
-  };
-  if (typeof data.fieldId !== "string" || typeof data.operator !== "string") {
-    return null;
-  }
-  const operator = OPERATOR_ALIASES[data.operator];
-  if (!operator) return null;
-  return {
-    fieldId: data.fieldId,
-    operator,
-    value: typeof data.value === "string" ? data.value : "",
-  };
-};
-
-const upgradeConditionGroup = (raw: unknown): ConditionGroup | null => {
-  if (typeof raw !== "object" || raw === null) return null;
-
-  // Current shape: a combinator group.
-  const group = raw as { combinator?: unknown; conditions?: unknown };
-  if (
-    (group.combinator === "all" || group.combinator === "any") &&
-    Array.isArray(group.conditions)
-  ) {
-    const conditions = group.conditions
-      .map((entry) => upgradeCondition(entry))
-      .filter((condition) => condition !== null);
-    return { combinator: group.combinator, conditions };
-  }
-
-  // Legacy shape: a single flat condition wrapped into a trivial group.
-  const legacy = upgradeCondition(raw);
-  return legacy ? { combinator: "all", conditions: [legacy] } : null;
-};
-
-const upgradeFieldConditions = (
-  field: AnyFieldDefinition,
-): AnyFieldDefinition => {
-  const source = field.conditions as Record<string, unknown> | undefined;
-  const conditions: FieldConditions = {};
-  for (const key of ["disable", "hide", "show"] as const) {
-    const group = upgradeConditionGroup(source?.[key]);
-    if (group) conditions[key] = group;
-  }
-  return { ...field, conditions };
 };

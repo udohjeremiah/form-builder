@@ -296,7 +296,9 @@ const FIELD_REGISTRY: {
         placeholder: "One per line",
       },
     ],
-    defaults: () => ({ options: ["Option 1", "Option 2", "Option 3"] }),
+    defaults: () => ({
+      options: ["Option 1", "Option 2", "Option 3"],
+    }),
     icon: "CircleIcon",
     label: "Radio",
     type: "radio",
@@ -321,7 +323,9 @@ const FIELD_REGISTRY: {
       },
       { key: "multiple", kind: "boolean", label: "Multiple" },
     ],
-    defaults: () => ({ options: ["Option 1", "Option 2", "Option 3"] }),
+    defaults: () => ({
+      options: ["Option 1", "Option 2", "Option 3"],
+    }),
     icon: "ChevronDownIcon",
     label: "Select",
     type: "select",

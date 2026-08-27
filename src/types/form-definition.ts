@@ -10,12 +10,12 @@ export interface BaseFieldAttributes {
 }
 
 /**
- * A group of sibling conditions combined with a single combinator. An empty
- * group is always satisfied.
+ * A group of sibling rules combined with a single combinator. An empty group
+ * is always satisfied.
  */
 export interface ConditionGroup {
   combinator: "all" | "any";
-  conditions: FieldCondition[];
+  rules: FieldRule[];
 }
 
 export type ConditionOperator =
@@ -62,27 +62,32 @@ export interface FieldAttributesByType {
   url: UrlFieldAttributes;
 }
 
-export interface FieldCondition {
-  fieldId: string;
-  operator: ConditionOperator;
-  value?: string;
+export interface FieldDefinition<Type extends FieldType = FieldType> {
+  attributes: FieldAttributesByType[Type];
+  id: string;
+  logic: FieldLogic;
+  type: Type;
 }
 
 /**
- * Effects a field can define. Each key holds the condition under which the
- * effect applies; an absent key means the effect never applies.
+ * The conditional logic a field can define, keyed by effect. An absent key
+ * means the effect never applies.
  */
-export interface FieldConditions {
+export interface FieldLogic {
   disable?: ConditionGroup;
   hide?: ConditionGroup;
   show?: ConditionGroup;
 }
 
-export interface FieldDefinition<Type extends FieldType = FieldType> {
-  attributes: FieldAttributesByType[Type];
-  conditions: FieldConditions;
-  id: string;
-  type: Type;
+/**
+ * A single predicate inside a condition group. `value` is always declared in
+ * the schema (it may be unused for presence operators like `empty` and
+ * `not_empty`).
+ */
+export interface FieldRule {
+  fieldId: string;
+  operator: ConditionOperator;
+  value?: string;
 }
 
 export type FieldType =

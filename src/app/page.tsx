@@ -55,6 +55,7 @@ import {
   getField,
   moveField,
   moveFieldIntoSection,
+  moveFieldWithinSection,
   moveSection,
   moveStep,
   newField,
@@ -366,8 +367,51 @@ export default function BuilderPage() {
         }
       }
 
+      // Resolve which section the dragged field started in, and the running
+      // flattened offset of that section, so dnd-kit's live sortable index can
+      // be mapped back to a section-local position.
+      let sourceSectionId: null | string = null;
+      let sourceOffset = 0;
+      for (const entry of renderedSections) {
+        if (entry.section.fields.some((field) => field.id === fieldId)) {
+          sourceSectionId = entry.section.id;
+          break;
+        }
+        sourceOffset += entry.section.fields.length;
+      }
+
+      // Resolve the target section id whether the drop landed on a field, a
+      // section body, or neither.
+      let targetSectionId: null | string =
+        targetId !== null && droppedOnSection ? targetId : null;
+      if (targetSectionId === null && targetId !== null) {
+        for (const entry of renderedSections) {
+          if (entry.section.fields.some((field) => field.id === targetId)) {
+            targetSectionId = entry.section.id;
+            break;
+          }
+        }
+      }
+
+      // Reorder within the same section using the sortable's live index, which
+      // mirrors the optimistic on-screen order exactly (fixes intra-section
+      // reorders snapping back). Cross-section drops fall through to the
+      // id-based moves below.
+      if (
+        sourceSectionId !== null &&
+        sourceSectionId === targetSectionId &&
+        isSortable(source)
+      ) {
+        const fromLocal = source.initialIndex - sourceOffset;
+        const toLocal = source.index - sourceOffset;
+        setFormState((previous) =>
+          moveFieldWithinSection(previous, sourceSectionId, fromLocal, toLocal),
+        );
+        return;
+      }
+
       if (targetId !== null && droppedOnSection) {
-        // Field drop on a section body rather than on another field.
+        // Field dropped on the body of a different section: append to its end.
         setFormState((previous) =>
           moveFieldIntoSection(previous, fieldId, targetId),
         );
@@ -657,7 +701,7 @@ export default function BuilderPage() {
             title={canComplete ? undefined : "Add at least one field"}
           >
             <CircleCheckIcon className="size-3" />
-            Done
+            Complete
           </button>
         </div>
       </header>

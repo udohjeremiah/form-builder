@@ -1,13 +1,13 @@
 "use client";
 
-import { EyeIcon, PlusIcon, XIcon } from "lucide-react";
+import { PlusIcon, XIcon } from "lucide-react";
 import { Fragment } from "react";
 
 import type {
   AnyFieldDefinition,
   ConditionGroup,
-  FieldCondition,
-  FieldConditions,
+  FieldLogic,
+  FieldRule,
 } from "@/types/form-definition";
 
 import { Badge } from "@/components/ui/badge";
@@ -40,7 +40,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/cn";
 import {
@@ -50,7 +49,7 @@ import {
   getOperatorsForType,
 } from "@/lib/field-registry";
 
-type EffectKey = keyof FieldConditions;
+type EffectKey = keyof FieldLogic;
 
 const CONDITION_EFFECTS: { label: string; value: EffectKey }[] = [
   { label: "Show field", value: "show" },
@@ -58,10 +57,181 @@ const CONDITION_EFFECTS: { label: string; value: EffectKey }[] = [
   { label: "Disable field", value: "disable" },
 ];
 
-const NEW_CONDITION: FieldCondition = {
-  fieldId: "",
-  operator: "not_empty",
-  value: "",
+const NEW_RULE: FieldRule = { fieldId: "", operator: "not_empty" };
+
+/**
+ * A self-contained condition builder that drives a single ConditionGroup.
+ * Used by both the field-level "Behavior" editor and per-option-group gating.
+ */
+const ConditionEditor = ({
+  allFields,
+  excludeFieldId,
+  group,
+  onChange,
+}: {
+  allFields?: AnyFieldDefinition[];
+  excludeFieldId: string;
+  group: ConditionGroup;
+  onChange: (group: ConditionGroup) => void;
+}) => {
+  const updateRule = (index: number, patch: Partial<FieldRule>) => {
+    onChange({
+      ...group,
+      rules: group.rules.map((rule, ruleIndex) =>
+        ruleIndex === index ? { ...rule, ...patch } : rule,
+      ),
+    });
+  };
+
+  const removeRule = (index: number) => {
+    onChange({
+      ...group,
+      rules: group.rules.filter((_, ruleIndex) => ruleIndex !== index),
+    });
+  };
+
+  return (
+    <div className="space-y-2 rounded-lg border border-border/60 bg-muted/50 p-2.5">
+      <div className="space-y-1">
+        <Label className="text-[10px] font-medium text-muted-foreground/60">
+          Match
+        </Label>
+        <Select
+          onValueChange={(v) => {
+            if (!v) return;
+            onChange({ ...group, combinator: v });
+          }}
+          value={group.combinator}
+        >
+          <SelectTrigger className="h-7 w-full text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem className="text-xs" value="all">
+              All conditions
+            </SelectItem>
+            <SelectItem className="text-xs" value="any">
+              Any condition
+            </SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {group.rules.length === 0 && (
+        <p className="rounded-md border border-dashed border-border/70 py-3 text-center text-[11px] text-muted-foreground/60">
+          No conditions yet. Add one below.
+        </p>
+      )}
+
+      {group.rules.map((rule, index) => {
+        const targetField = allFields?.find((f) => f.id === rule.fieldId);
+        // Until a target field is chosen, offer the broadest (text-like)
+        // operator set.
+        const operators = getOperatorsForType(targetField?.type ?? "text");
+
+        return (
+          <div key={index}>
+            {index > 0 && (
+              <div className="flex items-center gap-2 py-1.5">
+                <span className="h-px flex-1 bg-border/70" />
+                <span className="rounded-full bg-muted px-2 py-0.5 font-mono text-[9px] tracking-wide text-muted-foreground/60 uppercase">
+                  {group.combinator === "any" ? "or" : "and"}
+                </span>
+                <span className="h-px flex-1 bg-border/70" />
+              </div>
+            )}
+
+            <div className="space-y-1.5 rounded-md border border-border/50 bg-background/60 p-2">
+              <div className="flex items-center gap-1.5">
+                <Select
+                  onValueChange={(v) => {
+                    if (!v) return;
+                    const next: Partial<FieldRule> = { fieldId: v };
+                    const target = allFields?.find((f) => f.id === v);
+                    if (
+                      target &&
+                      !getOperatorsForType(target.type).includes(rule.operator)
+                    ) {
+                      next.operator = getOperatorsForType(target.type)[0];
+                    }
+                    updateRule(index, next);
+                  }}
+                  value={rule.fieldId}
+                >
+                  <SelectTrigger className="h-7 flex-1 text-xs">
+                    <SelectValue placeholder="Select a field..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {allFields
+                      ?.filter((f) => f.id !== excludeFieldId)
+                      .map((f) => (
+                        <SelectItem className="text-xs" key={f.id} value={f.id}>
+                          {f.attributes.label}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+                <button
+                  className="shrink-0 rounded-md p-1 text-muted-foreground/50 transition-colors hover:bg-destructive/10 hover:text-destructive"
+                  onClick={() => {
+                    removeRule(index);
+                  }}
+                  title="Remove condition"
+                >
+                  <XIcon className="size-3" />
+                </button>
+              </div>
+
+              <Select
+                onValueChange={(v) => {
+                  if (!v) return;
+                  updateRule(index, { operator: v });
+                }}
+                value={rule.operator}
+              >
+                <SelectTrigger className="h-7 w-full text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {operators.map((operator) => (
+                    <SelectItem
+                      className="text-xs"
+                      key={operator}
+                      value={operator}
+                    >
+                      {CONDITION_OPERATOR_LABELS[operator]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {!["empty", "not_empty"].includes(rule.operator) && (
+                <Input
+                  className="h-7 font-mono text-xs"
+                  onChange={(event) => {
+                    updateRule(index, { value: event.target.value });
+                  }}
+                  placeholder="Expected value..."
+                  value={rule.value ?? ""}
+                />
+              )}
+            </div>
+          </div>
+        );
+      })}
+
+      <Button
+        className="w-full border-dashed"
+        onClick={() => {
+          onChange({ ...group, rules: [...group.rules, { ...NEW_RULE }] });
+        }}
+        size="xs"
+        variant="outline"
+      >
+        <PlusIcon /> Add condition
+      </Button>
+    </div>
+  );
 };
 
 const parseNumberInput = (raw: string): number | undefined => {
@@ -181,41 +351,22 @@ export function FieldProperties({
   // The active effect is whichever key currently holds a group; `show` wins
   // ties so newly enabled conditioning lands on the familiar effect.
   const activeEffect =
-    CONDITION_EFFECTS.find((effect) => field.conditions[effect.value])?.value ??
+    CONDITION_EFFECTS.find((effect) => field.logic[effect.value])?.value ??
     "show";
-  const activeGroup: ConditionGroup | undefined =
-    field.conditions[activeEffect];
+  const activeGroup: ConditionGroup | undefined = field.logic[activeEffect];
 
-  const setConditions = (conditions: FieldConditions) => {
-    onChange(field.id, () => ({ ...field, conditions }));
+  const setLogic = (logic: FieldLogic) => {
+    onChange(field.id, () => ({ ...field, logic }));
   };
 
   const updateGroup = (
     transform: (group: ConditionGroup) => ConditionGroup,
   ) => {
     if (!activeGroup) return;
-    setConditions({
-      ...field.conditions,
+    setLogic({
+      ...field.logic,
       [activeEffect]: transform(activeGroup),
     });
-  };
-
-  const updateCondition = (index: number, patch: Partial<FieldCondition>) => {
-    updateGroup((group) => ({
-      ...group,
-      conditions: group.conditions.map((condition, conditionIndex) =>
-        conditionIndex === index ? { ...condition, ...patch } : condition,
-      ),
-    }));
-  };
-
-  const removeCondition = (index: number) => {
-    updateGroup((group) => ({
-      ...group,
-      conditions: group.conditions.filter(
-        (_, conditionIndex) => conditionIndex !== index,
-      ),
-    }));
   };
 
   return (
@@ -283,16 +434,29 @@ export function FieldProperties({
           />
         </div>
 
-        <div className="flex items-center justify-between py-1">
+        <div className="space-y-1">
           <Label className="text-[11px] font-medium text-muted-foreground/70">
             Required
           </Label>
-          <Switch
-            checked={!!field.attributes.required}
-            onCheckedChange={(v) => {
-              setAttribute({ required: v });
+          <Select
+            onValueChange={(v) => {
+              if (!v) return;
+              setAttribute({ required: v === "yes" });
             }}
-          />
+            value={field.attributes.required ? "yes" : "no"}
+          >
+            <SelectTrigger className="h-7 w-full text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem className="text-xs" value="yes">
+                Yes
+              </SelectItem>
+              <SelectItem className="text-xs" value="no">
+                No
+              </SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         {entry.attributes.length > 0 && (
@@ -311,19 +475,29 @@ export function FieldProperties({
 
           if (meta.kind === "boolean") {
             return (
-              <div
-                className="flex items-center justify-between py-1"
-                key={meta.key}
-              >
+              <div className="space-y-1" key={meta.key}>
                 <Label className="text-[11px] font-medium text-muted-foreground/70">
                   {meta.label}
                 </Label>
-                <Switch
-                  checked={!!value}
-                  onCheckedChange={(checked) => {
-                    setAttributeValue(meta.key, checked);
+                <Select
+                  onValueChange={(v) => {
+                    if (!v) return;
+                    setAttributeValue(meta.key, v === "yes");
                   }}
-                />
+                  value={value ? "yes" : "no"}
+                >
+                  <SelectTrigger className="h-7 w-full text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem className="text-xs" value="yes">
+                      Yes
+                    </SelectItem>
+                    <SelectItem className="text-xs" value="no">
+                      No
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             );
           }
@@ -391,12 +565,19 @@ export function FieldProperties({
                     setAttributeValue(meta.key, value);
                   }}
                 >
-                  <ComboboxChips ref={anchor}>
+                  <ComboboxChips className="w-full min-w-0" ref={anchor}>
                     <ComboboxValue>
                       {(values: string[]) => (
                         <Fragment>
                           {values.map((value: string) => (
-                            <ComboboxChip key={value}>{value}</ComboboxChip>
+                            <ComboboxChip
+                              className="max-w-full min-w-0"
+                              key={value}
+                            >
+                              <span className="max-w-40 min-w-0 truncate">
+                                {value}
+                              </span>
+                            </ComboboxChip>
                           ))}
                           <ComboboxChipsInput />
                         </Fragment>
@@ -462,7 +643,12 @@ export function FieldProperties({
                 <Textarea
                   className="resize-none font-mono text-xs"
                   onChange={(event) => {
-                    setAttributeValue(meta.key, event.target.value.split("\n"));
+                    setAttributeValue(
+                      meta.key,
+                      event.target.value
+                        .split("\n")
+                        .filter((line) => line.length > 0),
+                    );
                   }}
                   placeholder={meta.placeholder}
                   rows={3}
@@ -506,28 +692,37 @@ export function FieldProperties({
             Behavior
           </h3>
 
-          <div className="mb-2 flex items-center justify-between py-1">
-            <Label className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground/70">
-              <EyeIcon className="size-3" />
+          <div className="mb-2 space-y-1">
+            <Label className="text-[11px] font-medium text-muted-foreground/70">
               Conditionally
             </Label>
-            <Switch
-              checked={!!activeGroup}
-              onCheckedChange={(checked) => {
-                if (checked) {
-                  setConditions({
-                    ...field.conditions,
-                    [activeEffect]: {
-                      combinator: "all",
-                      conditions: [{ ...NEW_CONDITION }],
-                    },
+            <Select
+              onValueChange={(v) => {
+                if (!v) return;
+                if (v === "yes") {
+                  setLogic({
+                    ...field.logic,
+                    [activeEffect]: { combinator: "all", rules: [] },
                   });
                   return;
                 }
                 // Disabling conditioning clears every effect.
-                setConditions({});
+                setLogic({});
               }}
-            />
+              value={activeGroup ? "yes" : "no"}
+            >
+              <SelectTrigger className="h-7 w-full text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem className="text-xs" value="yes">
+                  Yes
+                </SelectItem>
+                <SelectItem className="text-xs" value="no">
+                  No
+                </SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           {!!activeGroup && (
@@ -539,8 +734,8 @@ export function FieldProperties({
                 <Select
                   onValueChange={(v) => {
                     if (!v || v === activeEffect) return;
-                    const { [activeEffect]: moved, ...rest } = field.conditions;
-                    setConditions(moved ? { ...rest, [v]: moved } : rest);
+                    const { [activeEffect]: moved, ...rest } = field.logic;
+                    setLogic(moved ? { ...rest, [v]: moved } : rest);
                   }}
                   value={activeEffect}
                 >
@@ -561,162 +756,14 @@ export function FieldProperties({
                 </Select>
               </div>
 
-              <div className="space-y-2 rounded-lg border border-border/60 bg-muted/50 p-2.5">
-                <div className="space-y-1">
-                  <Label className="text-[10px] font-medium text-muted-foreground/60">
-                    Match
-                  </Label>
-                  <Select
-                    onValueChange={(v) => {
-                      if (!v) return;
-                      const combinator = v;
-                      updateGroup((group) => ({ ...group, combinator }));
-                    }}
-                    value={activeGroup.combinator}
-                  >
-                    <SelectTrigger className="h-7 w-full text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem className="text-xs" value="all">
-                        All conditions
-                      </SelectItem>
-                      <SelectItem className="text-xs" value="any">
-                        Any condition
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {activeGroup.conditions.map((condition, index) => {
-                  const targetField = allFields?.find(
-                    (f) => f.id === condition.fieldId,
-                  );
-                  // Until a target field is chosen, offer the broadest
-                  // (text-like) operator set.
-                  const operators = getOperatorsForType(
-                    targetField?.type ?? "text",
-                  );
-
-                  return (
-                    <div key={index}>
-                      {index > 0 && (
-                        <div className="flex items-center gap-2 py-1.5">
-                          <span className="h-px flex-1 bg-border/70" />
-                          <span className="rounded-full bg-muted px-2 py-0.5 font-mono text-[9px] tracking-wide text-muted-foreground/60 uppercase">
-                            {activeGroup.combinator === "any" ? "or" : "and"}
-                          </span>
-                          <span className="h-px flex-1 bg-border/70" />
-                        </div>
-                      )}
-
-                      <div className="space-y-1.5 rounded-md border border-border/50 bg-background/60 p-2">
-                        <div className="flex items-center gap-1.5">
-                          <Select
-                            onValueChange={(v) => {
-                              if (!v) return;
-                              const next: Partial<FieldCondition> = {
-                                fieldId: v,
-                              };
-                              const target = allFields?.find((f) => f.id === v);
-                              if (
-                                target &&
-                                !getOperatorsForType(target.type).includes(
-                                  condition.operator,
-                                )
-                              ) {
-                                next.operator = getOperatorsForType(
-                                  target.type,
-                                )[0];
-                              }
-                              updateCondition(index, next);
-                            }}
-                            value={condition.fieldId}
-                          >
-                            <SelectTrigger className="h-7 flex-1 text-xs">
-                              <SelectValue placeholder="Select a field..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {allFields
-                                ?.filter((f) => f.id !== field.id)
-                                .map((f) => (
-                                  <SelectItem
-                                    className="text-xs"
-                                    key={f.id}
-                                    value={f.id}
-                                  >
-                                    {f.attributes.label}
-                                  </SelectItem>
-                                ))}
-                            </SelectContent>
-                          </Select>
-                          <button
-                            className="shrink-0 rounded-md p-1 text-muted-foreground/50 transition-colors hover:bg-destructive/10 hover:text-destructive"
-                            onClick={() => {
-                              removeCondition(index);
-                            }}
-                            title="Remove condition"
-                          >
-                            <XIcon className="size-3" />
-                          </button>
-                        </div>
-
-                        <Select
-                          onValueChange={(v) => {
-                            if (!v) return;
-                            updateCondition(index, { operator: v });
-                          }}
-                          value={condition.operator}
-                        >
-                          <SelectTrigger className="h-7 w-full text-xs">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {operators.map((operator) => (
-                              <SelectItem
-                                className="text-xs"
-                                key={operator}
-                                value={operator}
-                              >
-                                {CONDITION_OPERATOR_LABELS[operator]}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-
-                        {!["empty", "not_empty"].includes(
-                          condition.operator,
-                        ) && (
-                          <Input
-                            className="h-7 font-mono text-xs"
-                            onChange={(event) => {
-                              updateCondition(index, {
-                                value: event.target.value,
-                              });
-                            }}
-                            placeholder="Expected value..."
-                            value={condition.value ?? ""}
-                          />
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-
-                <Button
-                  className="w-full border-dashed"
-                  onClick={() => {
-                    updateGroup((group) => ({
-                      ...group,
-                      conditions: [...group.conditions, { ...NEW_CONDITION }],
-                    }));
-                  }}
-                  size="xs"
-                  variant="outline"
-                >
-                  <PlusIcon /> Add condition
-                </Button>
-              </div>
+              <ConditionEditor
+                allFields={allFields}
+                excludeFieldId={field.id}
+                group={activeGroup}
+                onChange={(next) => {
+                  updateGroup(() => next);
+                }}
+              />
             </>
           )}
         </div>

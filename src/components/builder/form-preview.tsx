@@ -42,6 +42,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/cn";
 import {
+  getActiveOptions,
   getAllFields,
   isFieldDisabled,
   isFieldVisible,
@@ -270,7 +271,10 @@ const FieldInput = ({
           }}
           value={value}
         >
-          {(field.attributes.options ?? ["Option 1", "Option 2"])
+          {(getActiveOptions(field).length > 0
+            ? getActiveOptions(field)
+            : ["Option 1", "Option 2"]
+          )
             .filter(Boolean)
             .map((o) => (
               <div className="flex items-center gap-3" key={o}>
@@ -347,11 +351,13 @@ const FieldInput = ({
             }}
             value={(value as string | undefined)?.split(",") ?? []}
           >
-            {(field.attributes.options ?? []).filter(Boolean).map((o) => (
-              <option key={o} value={o}>
-                {o}
-              </option>
-            ))}
+            {getActiveOptions(field)
+              .filter(Boolean)
+              .map((o) => (
+                <option key={o} value={o}>
+                  {o}
+                </option>
+              ))}
           </select>
         );
       }
@@ -376,11 +382,13 @@ const FieldInput = ({
             />
           </SelectTrigger>
           <SelectContent>
-            {(field.attributes.options ?? []).filter(Boolean).map((o) => (
-              <SelectItem key={o} value={o}>
-                {o}
-              </SelectItem>
-            ))}
+            {getActiveOptions(field)
+              .filter(Boolean)
+              .map((o) => (
+                <SelectItem key={o} value={o}>
+                  {o}
+                </SelectItem>
+              ))}
           </SelectContent>
         </Select>
       );
@@ -738,11 +746,6 @@ export function FormPreview({ definition }: { definition: FormDefinition }) {
                                 <>
                                   <Label className="flex items-center gap-1 text-sm font-medium text-foreground">
                                     {field.attributes.label}
-                                    {field.attributes.required && (
-                                      <span className="text-xs text-primary">
-                                        *
-                                      </span>
-                                    )}
                                   </Label>
                                   {field.attributes.description && (
                                     <p className="text-xs text-muted-foreground">
