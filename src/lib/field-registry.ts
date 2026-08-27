@@ -5,10 +5,134 @@ import type {
   FieldType,
 } from "@/types/form-definition";
 
+export const AUTOCOMPLETE_OPTIONS: {
+  readonly label: string;
+  readonly options: readonly {
+    readonly label: string;
+    readonly value: string;
+  }[];
+}[] = [
+  {
+    label: "Personal",
+    options: [
+      { label: "Full name", value: "name" },
+      { label: "First name", value: "given-name" },
+      { label: "Last name", value: "family-name" },
+      { label: "Email", value: "email" },
+      { label: "Phone number", value: "tel" },
+      { label: "Birthday", value: "bday" },
+    ],
+  },
+  {
+    label: "Address",
+    options: [
+      { label: "Street address", value: "street-address" },
+      { label: "Address line 1", value: "address-line1" },
+      { label: "Address line 2", value: "address-line2" },
+      { label: "City", value: "address-level2" },
+      { label: "State / Province", value: "address-level1" },
+      { label: "ZIP / Postal code", value: "postal-code" },
+      { label: "Country", value: "country" },
+    ],
+  },
+  {
+    label: "Payment",
+    options: [
+      { label: "Cardholder name", value: "cc-name" },
+      { label: "Card number", value: "cc-number" },
+      { label: "Expiration date", value: "cc-exp" },
+      { label: "Security code", value: "cc-csc" },
+    ],
+  },
+  {
+    label: "Auth",
+    options: [
+      { label: "Username", value: "username" },
+      { label: "Current password", value: "current-password" },
+      { label: "New password", value: "new-password" },
+    ],
+  },
+];
+
+export const FILE_TYPE_OPTIONS: {
+  readonly label: string;
+  readonly options: readonly {
+    readonly label: string;
+    readonly value: string;
+  }[];
+}[] = [
+  {
+    label: "Images",
+    options: [
+      { label: "JPEG", value: "image/jpeg" },
+      { label: "PNG", value: "image/png" },
+      { label: "GIF", value: "image/gif" },
+      { label: "WebP", value: "image/webp" },
+      { label: "SVG", value: "image/svg+xml" },
+    ],
+  },
+  {
+    label: "Documents",
+    options: [
+      { label: "PDF", value: "application/pdf" },
+      { label: "Word", value: "application/msword" },
+      {
+        label: "Word (OpenXML)",
+        value:
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      },
+      { label: "Excel", value: "application/vnd.ms-excel" },
+      {
+        label: "Excel (OpenXML)",
+        value:
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      },
+      { label: "Plain text", value: "text/plain" },
+    ],
+  },
+  {
+    label: "Video",
+    options: [
+      { label: "MP4", value: "video/mp4" },
+      { label: "WebM", value: "video/webm" },
+    ],
+  },
+  {
+    label: "Audio",
+    options: [
+      { label: "MP3", value: "audio/mpeg" },
+      { label: "WAV", value: "audio/wav" },
+    ],
+  },
+  {
+    label: "Archives",
+    options: [
+      { label: "ZIP", value: "application/zip" },
+      { label: "TAR", value: "application/x-tar" },
+      { label: "GZIP", value: "application/gzip" },
+    ],
+  },
+];
+
 interface AttributeEditorMeta<Type extends FieldType = FieldType> {
+  inputType?: string;
   key: Exclude<keyof FieldAttributesByType[Type], keyof BaseFieldAttributes>;
-  kind: "boolean" | "lines" | "number" | "text";
+  kind:
+    | "autocomplete"
+    | "boolean"
+    | "datetime"
+    | "lines"
+    | "multi-select"
+    | "number"
+    | "text";
   label: string;
+  options?: readonly {
+    readonly label: string;
+    readonly options: readonly {
+      readonly label: string;
+      readonly value: string;
+    }[];
+  }[];
   placeholder?: string;
 }
 
@@ -38,14 +162,40 @@ const FIELD_REGISTRY: {
     type: "color",
   },
   date: {
-    attributes: [],
+    attributes: [
+      {
+        inputType: "date",
+        key: "maxDate",
+        kind: "datetime",
+        label: "Maximum date",
+      },
+      {
+        inputType: "date",
+        key: "minDate",
+        kind: "datetime",
+        label: "Minimum date",
+      },
+    ],
     defaults: () => ({}),
     icon: "CalendarIcon",
     label: "Date",
     type: "date",
   },
   datetime: {
-    attributes: [],
+    attributes: [
+      {
+        inputType: "datetime-local",
+        key: "maxDate",
+        kind: "datetime",
+        label: "Maximum date",
+      },
+      {
+        inputType: "datetime-local",
+        key: "minDate",
+        kind: "datetime",
+        label: "Minimum date",
+      },
+    ],
     defaults: () => ({}),
     icon: "CalendarClockIcon",
     label: "Date & Time",
@@ -55,9 +205,8 @@ const FIELD_REGISTRY: {
     attributes: [
       {
         key: "autoComplete",
-        kind: "text",
+        kind: "autocomplete",
         label: "Autocomplete",
-        placeholder: "e.g. email",
       },
       { key: "maxLength", kind: "number", label: "Maximum length" },
       { key: "minLength", kind: "number", label: "Minimum length" },
@@ -71,14 +220,16 @@ const FIELD_REGISTRY: {
     attributes: [
       {
         key: "accept",
-        kind: "lines",
+        kind: "multi-select",
         label: "Accepted file types",
-        placeholder: "One per line",
+        options: FILE_TYPE_OPTIONS,
       },
       { key: "maxSize", kind: "number", label: "Maximum file size" },
       { key: "multiple", kind: "boolean", label: "Multiple" },
     ],
-    defaults: () => ({}),
+    defaults: () => ({
+      accept: ["image/*", "application/pdf"],
+    }),
     icon: "UploadIcon",
     label: "File",
     type: "file",
@@ -98,9 +249,8 @@ const FIELD_REGISTRY: {
     attributes: [
       {
         key: "autoComplete",
-        kind: "text",
+        kind: "autocomplete",
         label: "Autocomplete",
-        placeholder: "e.g. email",
       },
       { key: "maxLength", kind: "number", label: "Maximum length" },
       { key: "minLength", kind: "number", label: "Minimum length" },
@@ -120,9 +270,8 @@ const FIELD_REGISTRY: {
     attributes: [
       {
         key: "autoComplete",
-        kind: "text",
+        kind: "autocomplete",
         label: "Autocomplete",
-        placeholder: "e.g. email",
       },
       { key: "maxLength", kind: "number", label: "Maximum length" },
       { key: "minLength", kind: "number", label: "Minimum length" },
@@ -170,6 +319,7 @@ const FIELD_REGISTRY: {
         label: "Options",
         placeholder: "One per line",
       },
+      { key: "multiple", kind: "boolean", label: "Multiple" },
     ],
     defaults: () => ({ options: ["Option 1", "Option 2", "Option 3"] }),
     icon: "ChevronDownIcon",
@@ -191,9 +341,8 @@ const FIELD_REGISTRY: {
     attributes: [
       {
         key: "autoComplete",
-        kind: "text",
+        kind: "autocomplete",
         label: "Autocomplete",
-        placeholder: "e.g. email",
       },
       { key: "maxLength", kind: "number", label: "Maximum length" },
       { key: "minLength", kind: "number", label: "Minimum length" },
@@ -213,9 +362,8 @@ const FIELD_REGISTRY: {
     attributes: [
       {
         key: "autoComplete",
-        kind: "text",
+        kind: "autocomplete",
         label: "Autocomplete",
-        placeholder: "e.g. email",
       },
       { key: "maxLength", kind: "number", label: "Maximum length" },
       { key: "minLength", kind: "number", label: "Minimum length" },
@@ -226,7 +374,20 @@ const FIELD_REGISTRY: {
     type: "textarea",
   },
   time: {
-    attributes: [],
+    attributes: [
+      {
+        inputType: "time",
+        key: "maxDate",
+        kind: "datetime",
+        label: "Maximum time",
+      },
+      {
+        inputType: "time",
+        key: "minDate",
+        kind: "datetime",
+        label: "Minimum time",
+      },
+    ],
     defaults: () => ({}),
     icon: "ClockIcon",
     label: "Time",
@@ -243,9 +404,8 @@ const FIELD_REGISTRY: {
     attributes: [
       {
         key: "autoComplete",
-        kind: "text",
+        kind: "autocomplete",
         label: "Autocomplete",
-        placeholder: "e.g. email",
       },
       { key: "maxLength", kind: "number", label: "Maximum length" },
       { key: "minLength", kind: "number", label: "Minimum length" },

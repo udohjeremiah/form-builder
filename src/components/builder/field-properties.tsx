@@ -1,6 +1,7 @@
 "use client";
 
-import { EyeIcon, XIcon } from "lucide-react";
+import { EyeIcon, PlusIcon, XIcon } from "lucide-react";
+import { Fragment } from "react";
 
 import type {
   AnyFieldDefinition,
@@ -10,12 +11,31 @@ import type {
 } from "@/types/form-definition";
 
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Combobox,
+  ComboboxChip,
+  ComboboxChips,
+  ComboboxChipsInput,
+  ComboboxCollection,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxGroup,
+  ComboboxItem,
+  ComboboxLabel,
+  ComboboxList,
+  ComboboxSeparator,
+  ComboboxValue,
+  useComboboxAnchor,
+} from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -24,6 +44,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/cn";
 import {
+  AUTOCOMPLETE_OPTIONS,
   CONDITION_OPERATOR_LABELS,
   getFieldEntry,
   getOperatorsForType,
@@ -114,6 +135,8 @@ export function FieldProperties({
     updater: (field: AnyFieldDefinition) => AnyFieldDefinition,
   ) => void;
 }) {
+  const anchor = useComboboxAnchor();
+
   if (!field) {
     return (
       <div
@@ -162,9 +185,6 @@ export function FieldProperties({
     "show";
   const activeGroup: ConditionGroup | undefined =
     field.conditions[activeEffect];
-  const hasConditions = CONDITION_EFFECTS.some(
-    (effect) => !!field.conditions[effect.value],
-  );
 
   const setConditions = (conditions: FieldConditions) => {
     onChange(field.id, () => ({ ...field, conditions }));
@@ -245,7 +265,7 @@ export function FieldProperties({
                   event.target.value === "" ? undefined : event.target.value,
               });
             }}
-            placeholder="Helper text shown below the label"
+            placeholder="Additional context for the user"
             value={field.attributes.description ?? ""}
           />
         </div>
@@ -278,11 +298,9 @@ export function FieldProperties({
         {entry.attributes.length > 0 && (
           <>
             <Separator className="my-3" />
-            <div className="mb-2 flex items-center justify-between">
-              <h3 className="text-[11px] font-semibold tracking-widest text-muted-foreground/60 uppercase">
-                Attributes
-              </h3>
-            </div>
+            <h3 className="mb-4 text-[11px] font-semibold tracking-widest text-muted-foreground/60 uppercase">
+              Attributes
+            </h3>
           </>
         )}
 
@@ -305,6 +323,131 @@ export function FieldProperties({
                   onCheckedChange={(checked) => {
                     setAttributeValue(meta.key, checked);
                   }}
+                />
+              </div>
+            );
+          }
+
+          if (meta.kind === "autocomplete") {
+            return (
+              <div className="space-y-1" key={meta.key}>
+                <Label className="text-[11px] font-medium text-muted-foreground/70">
+                  {meta.label}
+                </Label>
+                <Select
+                  onValueChange={(v) => {
+                    setAttributeValue(meta.key, v === "off" ? undefined : v);
+                  }}
+                  value={(value as string | undefined) ?? "off"}
+                >
+                  <SelectTrigger className="h-7 w-full text-xs">
+                    <SelectValue placeholder="Off" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem className="text-xs" value="off">
+                      Off
+                    </SelectItem>
+                    {AUTOCOMPLETE_OPTIONS.map((group) => (
+                      <SelectGroup key={group.label}>
+                        <SelectLabel className="text-[10px]">
+                          {group.label}
+                        </SelectLabel>
+                        {group.options.map((option) => (
+                          <SelectItem
+                            className="text-xs"
+                            key={option.value}
+                            value={option.value}
+                          >
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            );
+          }
+
+          if (meta.kind === "multi-select") {
+            const multiOptions = (meta.options ?? []) as readonly {
+              readonly label: string;
+              readonly options: readonly {
+                readonly label: string;
+                readonly value: string;
+              }[];
+            }[];
+
+            return (
+              <div className="space-y-1" key={meta.key}>
+                <Label className="text-[11px] font-medium text-muted-foreground/70">
+                  {meta.label}
+                </Label>
+                <Combobox
+                  autoHighlight={true}
+                  items={multiOptions}
+                  multiple={true}
+                  onValueChange={(value) => {
+                    setAttributeValue(meta.key, value);
+                  }}
+                >
+                  <ComboboxChips ref={anchor}>
+                    <ComboboxValue>
+                      {(values: string[]) => (
+                        <Fragment>
+                          {values.map((value: string) => (
+                            <ComboboxChip key={value}>{value}</ComboboxChip>
+                          ))}
+                          <ComboboxChipsInput />
+                        </Fragment>
+                      )}
+                    </ComboboxValue>
+                  </ComboboxChips>
+                  <ComboboxContent anchor={anchor}>
+                    <ComboboxEmpty>No items found.</ComboboxEmpty>
+                    <ComboboxList>
+                      {(group: (typeof multiOptions)[number], index) => (
+                        <ComboboxGroup items={group.options} key={group.label}>
+                          <ComboboxLabel>{group.label}</ComboboxLabel>
+                          <ComboboxCollection>
+                            {(
+                              item: (typeof multiOptions)[number]["options"][number],
+                            ) => (
+                              <ComboboxItem key={item.value} value={item.value}>
+                                {item.label}
+                              </ComboboxItem>
+                            )}
+                          </ComboboxCollection>
+                          {index < multiOptions.length - 1 && (
+                            <ComboboxSeparator />
+                          )}
+                        </ComboboxGroup>
+                      )}
+                    </ComboboxList>
+                  </ComboboxContent>
+                </Combobox>
+              </div>
+            );
+          }
+
+          if (meta.kind === "datetime") {
+            return (
+              <div className="space-y-1" key={meta.key}>
+                <Label className="text-[11px] font-medium text-muted-foreground/70">
+                  {meta.label}
+                </Label>
+                <Input
+                  className="h-8 text-[13px]"
+                  onChange={(event) => {
+                    setAttributeValue(
+                      meta.key,
+                      event.target.value === ""
+                        ? undefined
+                        : event.target.value,
+                    );
+                  }}
+                  type={meta.inputType ?? "text"}
+                  value={(value as string | undefined) ?? ""}
                 />
               </div>
             );
@@ -359,19 +502,9 @@ export function FieldProperties({
 
         {/* Conditional behavior */}
         <div>
-          <div className="mb-2 flex items-center justify-between">
-            <h3 className="text-[11px] font-semibold tracking-widest text-muted-foreground/60 uppercase">
-              Behavior
-            </h3>
-            {hasConditions && (
-              <Badge
-                className="border-0 bg-accent/20 font-mono text-[9px] text-accent"
-                variant="secondary"
-              >
-                Conditional
-              </Badge>
-            )}
-          </div>
+          <h3 className="mb-4 text-[11px] font-semibold tracking-widest text-muted-foreground/60 uppercase">
+            Behavior
+          </h3>
 
           <div className="mb-2 flex items-center justify-between py-1">
             <Label className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground/70">
@@ -570,18 +703,19 @@ export function FieldProperties({
                   );
                 })}
 
-                <button
-                  className="w-full rounded-md border border-dashed border-border/60 py-1.5 text-[11px] font-medium text-muted-foreground/50 transition-colors hover:border-primary/40 hover:text-primary"
+                <Button
+                  className="w-full border-dashed"
                   onClick={() => {
                     updateGroup((group) => ({
                       ...group,
                       conditions: [...group.conditions, { ...NEW_CONDITION }],
                     }));
                   }}
-                  type="button"
+                  size="xs"
+                  variant="outline"
                 >
-                  + Add condition
-                </button>
+                  <PlusIcon /> Add condition
+                </Button>
               </div>
             </>
           )}

@@ -30,6 +30,11 @@ export type ConditionOperator =
   | "not_contains"
   | "not_empty";
 
+export interface DateTimeFieldAttributes extends BaseFieldAttributes {
+  maxDate?: string;
+  minDate?: string;
+}
+
 export interface EmailFieldAttributes extends BaseFieldAttributes {
   autoComplete?: string;
   maxLength?: number;
@@ -39,8 +44,8 @@ export interface EmailFieldAttributes extends BaseFieldAttributes {
 export interface FieldAttributesByType {
   checkbox: BaseFieldAttributes;
   color: BaseFieldAttributes;
-  date: BaseFieldAttributes;
-  datetime: BaseFieldAttributes;
+  date: DateTimeFieldAttributes;
+  datetime: DateTimeFieldAttributes;
   email: EmailFieldAttributes;
   file: FileFieldAttributes;
   number: NumberFieldAttributes;
@@ -48,11 +53,11 @@ export interface FieldAttributesByType {
   phone: PhoneFieldAttributes;
   radio: OptionsFieldAttributes;
   rating: RatingFieldAttributes;
-  select: OptionsFieldAttributes;
+  select: SelectFieldAttributes;
   slider: SliderFieldAttributes;
   text: TextFieldAttributes;
   textarea: TextareaFieldAttributes;
-  time: BaseFieldAttributes;
+  time: DateTimeFieldAttributes;
   toggle: BaseFieldAttributes;
   url: UrlFieldAttributes;
 }
@@ -154,6 +159,10 @@ export interface SectionDefinition {
   attributes: SectionAttributes;
   fields: AnyFieldDefinition[];
   id: string;
+}
+
+export interface SelectFieldAttributes extends OptionsFieldAttributes {
+  multiple?: boolean;
 }
 
 export interface SliderFieldAttributes extends BaseFieldAttributes {

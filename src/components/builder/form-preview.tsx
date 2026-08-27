@@ -328,6 +328,34 @@ const FieldInput = ({
     }
 
     case "select": {
+      if (field.attributes.multiple) {
+        return (
+          <select
+            className={cn(
+              "flex h-10 w-full items-center justify-between rounded-2xl border border-input bg-input/50 px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:ring-2 focus:ring-ring/30 focus:ring-offset-2 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50",
+              hasError ? "border-destructive/60 focus:ring-destructive/30" : "",
+            )}
+            disabled={disabled}
+            multiple
+            onBlur={onBlur}
+            onChange={(event) => {
+              const selected = Array.from(
+                event.target.selectedOptions,
+                (option) => option.value,
+              );
+              onChange(selected.join(","));
+            }}
+            value={(value as string | undefined)?.split(",") ?? []}
+          >
+            {(field.attributes.options ?? []).filter(Boolean).map((o) => (
+              <option key={o} value={o}>
+                {o}
+              </option>
+            ))}
+          </select>
+        );
+      }
+
       return (
         <Select
           disabled={disabled}
