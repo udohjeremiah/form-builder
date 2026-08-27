@@ -10,10 +10,12 @@ import type {
   StepAttributes,
   StepDefinition,
 } from "@/types/form-definition";
+import type { RulesDefinition } from "@/types/rule-definition";
 
 import { getFieldEntry } from "@/lib/field-registry";
+import { newRulesDefinition } from "@/lib/rule-definition";
 
-const FORM_DEFINITION_VERSION = 1;
+const FORM_DEFINITION_VERSION = 2;
 
 // Random, position-independent identifiers: nothing encodes order or time,
 // so ids survive reordering and never collide across restored drafts.
@@ -55,6 +57,7 @@ export const createDefaultDefinition = (): FormDefinition => ({
   // Deterministic ids keep the prerendered scaffold identical on the server
   // and client; anything added through the builder gets random ids instead.
   id: "frm_seed",
+  rules: newRulesDefinition(),
   steps: [
     {
       attributes: {},
@@ -565,6 +568,36 @@ export function validateFieldValue(
 }
 
 /**
+ * Coerces the persisted `rules` member into a standalone `RulesDefinition`.
+ * Handles both the current object shape ({ id, version, rules }) and the
+ * legacy bare array that predates the standalone rules schema.
+ */
+const normalizeRules = (raw: unknown): RulesDefinition => {
+  if (typeof raw === "object" && raw !== null) {
+    const candidate = raw as {
+      id?: unknown;
+      rules?: unknown;
+      version?: unknown;
+    };
+    if (
+      typeof candidate.id === "string" &&
+      typeof candidate.version === "number" &&
+      Array.isArray(candidate.rules)
+    ) {
+      return {
+        id: candidate.id,
+        rules: candidate.rules as RulesDefinition["rules"],
+        version: candidate.version,
+      };
+    }
+  }
+  if (Array.isArray(raw)) {
+    return { ...newRulesDefinition(), rules: raw as RulesDefinition["rules"] };
+  }
+  return newRulesDefinition();
+};
+
+/**
  * Validates persisted JSON against the current canonical structure and
  * normalizes `savedAt`. Returns null when the payload does not match.
  */
@@ -576,14 +609,22 @@ export const normalizePersisted = (
   // so every member stays nullable until validated below.
   const data = raw as {
     id?: unknown;
+    rules?: unknown;
     savedAt?: unknown;
     steps?: unknown;
     version?: unknown;
   };
   const savedAt = typeof data.savedAt === "number" ? data.savedAt : 0;
 
+  // Accept both the current schema version and the legacy v1 payloads (which
+  // predate rules) so persisted drafts keep loading after the field is added.
+  const versionNumber =
+    typeof data.version === "number" ? data.version : FORM_DEFINITION_VERSION;
+  const versionSupported =
+    versionNumber === FORM_DEFINITION_VERSION || versionNumber === 1;
+
   if (
-    data.version === FORM_DEFINITION_VERSION &&
+    versionSupported &&
     typeof data.id === "string" &&
     Array.isArray(data.steps) &&
     (data.steps as FormDefinition["steps"]).every(
@@ -595,6 +636,7 @@ export const normalizePersisted = (
   ) {
     return {
       id: data.id,
+      rules: normalizeRules(data.rules),
       savedAt,
       steps: data.steps as FormDefinition["steps"],
       version: FORM_DEFINITION_VERSION,

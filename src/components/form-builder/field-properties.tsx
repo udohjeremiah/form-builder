@@ -221,7 +221,7 @@ const ConditionEditor = ({
       })}
 
       <Button
-        className="w-full border-dashed"
+        className="w-full"
         onClick={() => {
           onChange({ ...group, rules: [...group.rules, { ...NEW_RULE }] });
         }}

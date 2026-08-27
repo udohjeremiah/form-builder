@@ -1,3 +1,5 @@
+import type { RulesDefinition } from "./rule-definition";
+
 export type AnyFieldDefinition = {
   [Type in FieldType]: FieldDefinition<Type>;
 }[FieldType];
@@ -118,6 +120,7 @@ export interface FileFieldAttributes extends BaseFieldAttributes {
 
 export interface FormDefinition {
   id: string;
+  rules: RulesDefinition;
   steps: StepDefinition[];
   version: number;
 }
