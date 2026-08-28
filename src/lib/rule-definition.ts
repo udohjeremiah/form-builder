@@ -199,3 +199,27 @@ export const DURATION_UNIT_LABELS: Readonly<Record<Duration["unit"], string>> =
 export const DURATION_UNIT_LIST = Object.keys(
   DURATION_UNIT_LABELS,
 ) as Duration["unit"][];
+
+/**
+ * Validates a persisted standalone rules payload against the canonical
+ * structure, returning null when the JSON does not match.
+ */
+export const normalizeRulesDefinition = (
+  raw: unknown,
+): null | RulesDefinition => {
+  if (typeof raw !== "object" || raw === null) return null;
+  // Deliberately permissive view of the payload: persisted JSON is untrusted.
+  const data = raw as { id?: unknown; rules?: unknown; version?: unknown };
+  if (
+    typeof data.id === "string" &&
+    typeof data.version === "number" &&
+    Array.isArray(data.rules)
+  ) {
+    return {
+      id: data.id,
+      rules: data.rules as RulesDefinition["rules"],
+      version: data.version,
+    };
+  }
+  return null;
+};

@@ -6,7 +6,6 @@ import { PointerActivationConstraints, PointerSensor } from "@dnd-kit/dom";
 import { DragDropProvider, DragOverlay } from "@dnd-kit/react";
 import { isSortable } from "@dnd-kit/react/sortable";
 import {
-  Code2Icon,
   Columns3Icon,
   EyeIcon,
   PanelLeftIcon,
@@ -26,8 +25,10 @@ import type {
 import { FieldPalette } from "@/components/form-builder/field-palette";
 import { FieldProperties } from "@/components/form-builder/field-properties";
 import { FormCanvas } from "@/components/form-builder/form-canvas";
-import { FormPreview } from "@/components/form-builder/form-preview";
-import { SchemaOutput } from "@/components/form-builder/schema-output";
+import {
+  PreviewPanel,
+  type PreviewPanelTab,
+} from "@/components/form-builder/preview-panel";
 import { StructureProperties } from "@/components/form-builder/structure-properties";
 import { cn } from "@/lib/cn";
 import {
@@ -57,7 +58,6 @@ interface BuilderSelection {
 }
 
 type MobilePanel = "canvas" | "output" | "palette" | "properties";
-type RightPanel = "preview" | "schema";
 
 // Mouse drags need a small distance threshold so plain clicks (select,
 // delete) are not swallowed by drag activation; touch and pen use a
@@ -87,11 +87,11 @@ export function FormBuilderView({
   allFields: AnyFieldDefinition[];
   formState: FormDefinition;
   isMobile: boolean;
-  rightPanel: RightPanel;
+  rightPanel: PreviewPanelTab;
   setFormState: (
     updater: ((previous: FormDefinition) => FormDefinition) | FormDefinition,
   ) => void;
-  setRightPanel: (panel: RightPanel) => void;
+  setRightPanel: (panel: PreviewPanelTab) => void;
 }) {
   // Multi-step is derived: a form is stepped exactly when it has more than
   // one step, so single-step forms never surface step chrome.
@@ -579,44 +579,11 @@ export function FormBuilderView({
             )}
             {mobilePanel === "output" && (
               <div className="flex h-full flex-col">
-                {/* Mini toggle for preview/schema on mobile */}
-                <div className="flex items-center gap-1 border-b border-border bg-background p-2">
-                  {[
-                    {
-                      icon: EyeIcon,
-                      key: "preview" as RightPanel,
-                      label: "Preview",
-                    },
-                    {
-                      icon: Code2Icon,
-                      key: "schema" as RightPanel,
-                      label: "Schema",
-                    },
-                  ].map(({ icon: Icon, key, label }) => (
-                    <button
-                      className={cn(
-                        "flex flex-1 items-center justify-center gap-1.5 rounded-md px-2.5 py-1.5 text-[11px] font-medium transition-all",
-                        rightPanel === key
-                          ? "bg-background text-foreground shadow-sm"
-                          : "text-muted-foreground/50 hover:text-foreground",
-                      )}
-                      key={key}
-                      onClick={() => {
-                        setRightPanel(key);
-                      }}
-                    >
-                      <Icon className="size-3.5" />
-                      {label}
-                    </button>
-                  ))}
-                </div>
-                <div className="flex-1 overflow-y-auto">
-                  {rightPanel === "preview" ? (
-                    <FormPreview definition={formState} />
-                  ) : (
-                    <SchemaOutput definition={formState} />
-                  )}
-                </div>
+                <PreviewPanel
+                  definition={formState}
+                  onTabChange={setRightPanel}
+                  tab={rightPanel}
+                />
               </div>
             )}
           </div>

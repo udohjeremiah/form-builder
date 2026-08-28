@@ -658,17 +658,6 @@ export function FormPreview({ definition }: { definition: FormDefinition }) {
 
   return (
     <div className="flex h-full flex-1 flex-col">
-      <div className="flex items-center justify-between border-b border-border bg-muted/50 px-6 py-3">
-        <h3 className="font-mono text-xs tracking-wider text-muted-foreground uppercase">
-          Preview
-        </h3>
-        {multiStepEnabled && (
-          <span className="font-mono text-[11px] text-muted-foreground">
-            {currentStep + 1} / {steps.length}
-          </span>
-        )}
-      </div>
-
       <div className="flex-1 overflow-y-auto p-8">
         {allFields.length === 0 ? (
           <div className="flex h-full items-center justify-center">
