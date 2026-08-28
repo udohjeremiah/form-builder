@@ -183,7 +183,7 @@ function ComparisonEditor({
         }}
         value={condition.operator}
       >
-        <SelectTrigger className="h-7 text-xs">
+        <SelectTrigger className="h-7 flex-1 text-xs">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
