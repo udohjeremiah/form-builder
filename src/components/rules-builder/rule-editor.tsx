@@ -1,6 +1,7 @@
 "use client";
 
 import { ChevronLeftIcon, Trash2Icon } from "lucide-react";
+import { useMemo } from "react";
 
 import type { AnyFieldDefinition } from "@/types/form-definition";
 import type { Condition, GroupCondition, Rule } from "@/types/rule-definition";
@@ -8,6 +9,7 @@ import type { Condition, GroupCondition, Rule } from "@/types/rule-definition";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { generateColor } from "@/lib/generate-color";
 import { newGroupCondition } from "@/lib/rule-definition";
 
 import { ThenEditor } from "./then-editor";
@@ -35,6 +37,8 @@ export function RuleEditor({
     onChange({ ...rule, condition: next });
   };
 
+  const color = useMemo(() => generateColor("rule"), []);
+
   return (
     <div className="mx-auto w-full max-w-3xl space-y-6 p-4 md:p-6">
       <div className="flex items-center justify-between">
@@ -48,7 +52,7 @@ export function RuleEditor({
         </Button>
       </div>
 
-      <div className="space-y-3 rounded-lg border border-border/60 p-4">
+      <section className="space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="text-[11px] font-semibold tracking-widest text-muted-foreground/60 uppercase">
             Rule
@@ -57,20 +61,25 @@ export function RuleEditor({
             {rule.id}
           </span>
         </div>
-        <div className="space-y-1">
-          <Label className="text-[11px] font-medium text-muted-foreground/70">
-            Area
-          </Label>
-          <Input
-            className="h-8 text-[13px]"
-            onChange={(event) => {
-              onChange({ ...rule, area: event.target.value });
-            }}
-            placeholder="Business/domain category this rule belongs to..."
-            value={rule.area}
-          />
+        <div
+          className="space-y-3 border-s-4 bg-background/40 p-4"
+          style={{ borderInlineStartColor: color }}
+        >
+          <div className="space-y-1">
+            <Label className="text-[11px] font-medium text-muted-foreground/70">
+              Area
+            </Label>
+            <Input
+              className="h-8 text-[13px]"
+              onChange={(event) => {
+                onChange({ ...rule, area: event.target.value });
+              }}
+              placeholder="Domain category this rule belongs to..."
+              value={rule.area}
+            />
+          </div>
         </div>
-      </div>
+      </section>
 
       <section className="space-y-3">
         <h3 className="text-[11px] font-semibold tracking-widest text-muted-foreground/60 uppercase">

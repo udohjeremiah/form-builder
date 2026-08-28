@@ -107,10 +107,10 @@ const ConditionEditor = ({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem className="text-xs" value="all">
+            <SelectItem className="text-xs" value="and">
               All conditions
             </SelectItem>
-            <SelectItem className="text-xs" value="any">
+            <SelectItem className="text-xs" value="or">
               Any condition
             </SelectItem>
           </SelectContent>
@@ -135,7 +135,7 @@ const ConditionEditor = ({
               <div className="flex items-center gap-2 py-1.5">
                 <span className="h-px flex-1 bg-border/70" />
                 <span className="rounded-full bg-muted px-2 py-0.5 font-mono text-[9px] tracking-wide text-muted-foreground/60 uppercase">
-                  {group.combinator === "any" ? "or" : "and"}
+                  {group.combinator === "or" ? "or" : "and"}
                 </span>
                 <span className="h-px flex-1 bg-border/70" />
               </div>
@@ -702,7 +702,7 @@ export function FieldProperties({
                 if (v === "yes") {
                   setLogic({
                     ...field.logic,
-                    [activeEffect]: { combinator: "all", rules: [] },
+                    [activeEffect]: { combinator: "and", rules: [] },
                   });
                   return;
                 }

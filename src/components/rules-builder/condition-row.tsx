@@ -1,6 +1,7 @@
 "use client";
 
 import { XIcon } from "lucide-react";
+import { useMemo } from "react";
 
 import type { AnyFieldDefinition } from "@/types/form-definition";
 import type {
@@ -18,6 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { generateColor } from "@/lib/generate-color";
 import {
   COMPARISON_OPERATOR_LABELS,
   COMPARISON_OPERATOR_LIST,
@@ -43,8 +45,14 @@ export function ConditionRow({
   onChange: (condition: Condition) => void;
   onRemove: () => void;
 }) {
+  const fieldId = "field" in condition ? condition.field : undefined;
+  const color = useMemo(() => generateColor(fieldId), [fieldId]);
+
   return (
-    <div className="space-y-1.5 rounded-md border border-border/50 bg-background/60 p-2">
+    <div
+      className="space-y-1.5 border-s-4 bg-background/60 p-2"
+      style={{ borderInlineStartColor: color }}
+    >
       <div className="flex items-center gap-1.5">
         <Select
           onValueChange={(value) => {
@@ -75,7 +83,7 @@ export function ConditionRow({
           </SelectContent>
         </Select>
         <Button
-          className="ml-auto shrink-0 text-muted-foreground/50 hover:bg-destructive/10 hover:text-destructive"
+          className="ms-auto shrink-0 text-muted-foreground/50 hover:bg-destructive/10 hover:text-destructive"
           onClick={onRemove}
           size="icon-xs"
           title="Remove condition"

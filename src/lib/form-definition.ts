@@ -460,7 +460,7 @@ function evaluateGroup(
   const passes = (rule: FieldRule) =>
     !rule.fieldId || evaluateRule(rule, values);
 
-  return group.combinator === "any"
+  return group.combinator === "or"
     ? group.rules.some((rule) => passes(rule))
     : group.rules.every((rule) => passes(rule));
 }

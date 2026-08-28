@@ -1,11 +1,13 @@
 "use client";
 
 import { FolderPlusIcon, PlusIcon, XIcon } from "lucide-react";
+import { useMemo } from "react";
 
 import type { AnyFieldDefinition } from "@/types/form-definition";
 import type { Condition, GroupCondition } from "@/types/rule-definition";
 
 import { Button } from "@/components/ui/button";
+import { generateColor } from "@/lib/generate-color";
 import {
   newComparisonCondition,
   newGroupCondition,
@@ -73,10 +75,14 @@ export function WhenEditor({
     );
   };
 
+  const color = useMemo(() => generateColor(), []);
+
   return (
-    <div className="border-l border-border pl-5">
-      <div className="relative flex items-center justify-between gap-2 pb-3">
-        <span className="absolute top-1/2 -left-5 h-px w-5 bg-border" />
+    <div
+      className="border-s-4 bg-background/40 p-2"
+      style={{ borderInlineStartColor: color }}
+    >
+      <div className="flex items-center justify-between gap-2 pb-3">
         <Combinator
           onChange={(operator) => {
             updateGroup({ operator });
@@ -139,8 +145,8 @@ export function WhenEditor({
 }
 
 /**
- * Renders a group's children. Each child hangs a short horizontal arm off the
- * rail that the parent's `border-l` provides.
+ * Renders a group's children. Each child carries its own accent border, so no
+ * connectors are needed — grouping is expressed purely through the border.
  */
 function GroupChildren({
   callbacks,
@@ -166,34 +172,31 @@ function GroupChildren({
   return (
     <div>
       {conditions.map((child, index) => (
-        <div className="relative" key={index}>
-          <span className="absolute inset-y-0 -left-5 my-auto h-px w-5 bg-border" />
-          <div className="py-1.5">
-            {child.type === "group" ? (
-              <NestedGroup
-                allFields={callbacks.allFields}
-                child={child}
-                onRemoveSelf={() => {
-                  callbacks.onRemoveGroup(index);
-                }}
-                onRootChange={(next) => {
-                  onRootChange(updateCondition(condition, [index], () => next));
-                }}
-                path={[...path, index]}
-              />
-            ) : (
-              <ConditionRow
-                allFields={callbacks.allFields}
-                condition={child}
-                onChange={(next) => {
-                  callbacks.onChangeCondition(index, next);
-                }}
-                onRemove={() => {
-                  callbacks.onRemoveCondition(index);
-                }}
-              />
-            )}
-          </div>
+        <div className="py-1.5" key={index}>
+          {child.type === "group" ? (
+            <NestedGroup
+              allFields={callbacks.allFields}
+              child={child}
+              onRemoveSelf={() => {
+                callbacks.onRemoveGroup(index);
+              }}
+              onRootChange={(next) => {
+                onRootChange(updateCondition(condition, [index], () => next));
+              }}
+              path={[...path, index]}
+            />
+          ) : (
+            <ConditionRow
+              allFields={callbacks.allFields}
+              condition={child}
+              onChange={(next) => {
+                callbacks.onChangeCondition(index, next);
+              }}
+              onRemove={() => {
+                callbacks.onRemoveCondition(index);
+              }}
+            />
+          )}
         </div>
       ))}
     </div>
@@ -202,7 +205,7 @@ function GroupChildren({
 
 /**
  * A nested (non-root) group. Renders its own combinator and recurses for its
- * children, keeping the connector going so groups can nest arbitrarily deep.
+ * children; it is delineated by its own accent border rather than a rail.
  */
 function NestedGroup({
   allFields,
@@ -217,6 +220,8 @@ function NestedGroup({
   onRootChange: (root: Condition) => void;
   path: readonly number[];
 }) {
+  const color = useMemo(() => generateColor(), []);
+
   const rootChange = (next: Condition) => {
     onRootChange(updateCondition(child, [], () => next));
   };
@@ -248,49 +253,49 @@ function NestedGroup({
   };
 
   return (
-    <div className="rounded-md border border-border/40 bg-background/40 p-2">
-      <div className="border-l border-border pl-5">
-        <div className="relative flex items-center justify-between gap-2 pb-2">
-          <span className="absolute top-1/2 -left-5 h-px w-5 bg-border" />
-          <Combinator
-            onChange={(operator) => {
-              rootChange(
-                updateCondition(child, [], (node) =>
-                  node.type === "group" ? { ...node, operator } : node,
-                ),
-              );
-            }}
-            operator={child.operator}
-          />
-          <Button
-            className="shrink-0 text-muted-foreground/50 hover:bg-destructive/10 hover:text-destructive"
-            onClick={onRemoveSelf}
-            size="icon-xs"
-            title="Remove group"
-            variant="ghost"
-          >
-            <XIcon className="size-3" />
-          </Button>
-        </div>
-
-        <GroupChildren
-          callbacks={{
-            allFields,
-            onChangeCondition: (index, next) => {
-              rootChange(updateCondition(child, [index], () => next));
-            },
-            onRemoveCondition: (index) => {
-              rootChange(removeCondition(child, [index]));
-            },
-            onRemoveGroup: (index) => {
-              rootChange(removeCondition(child, [index]));
-            },
+    <div
+      className="border-s-4 bg-background/40 p-2"
+      style={{ borderInlineStartColor: color }}
+    >
+      <div className="flex items-center justify-between gap-2 pb-2">
+        <Combinator
+          onChange={(operator) => {
+            rootChange(
+              updateCondition(child, [], (node) =>
+                node.type === "group" ? { ...node, operator } : node,
+              ),
+            );
           }}
-          condition={child}
-          onRootChange={onRootChange}
-          path={path}
+          operator={child.operator}
         />
+        <Button
+          className="shrink-0 text-muted-foreground/50 hover:bg-destructive/10 hover:text-destructive"
+          onClick={onRemoveSelf}
+          size="icon-xs"
+          title="Remove group"
+          variant="ghost"
+        >
+          <XIcon className="size-3" />
+        </Button>
       </div>
+
+      <GroupChildren
+        callbacks={{
+          allFields,
+          onChangeCondition: (index, next) => {
+            rootChange(updateCondition(child, [index], () => next));
+          },
+          onRemoveCondition: (index) => {
+            rootChange(removeCondition(child, [index]));
+          },
+          onRemoveGroup: (index) => {
+            rootChange(removeCondition(child, [index]));
+          },
+        }}
+        condition={child}
+        onRootChange={onRootChange}
+        path={path}
+      />
 
       <div className="flex gap-1.5 pt-2">
         <Button

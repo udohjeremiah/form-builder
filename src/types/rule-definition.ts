@@ -34,7 +34,7 @@ export interface ExistsCondition {
  */
 export interface GroupCondition {
   conditions: Condition[];
-  operator: "all" | "any";
+  operator: "and" | "or";
   type: "group";
 }
 

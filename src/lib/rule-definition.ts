@@ -50,7 +50,7 @@ export const newReviewCondition = (): ReviewCondition => ({
 
 export const newGroupCondition = (): GroupCondition => ({
   conditions: [],
-  operator: "all",
+  operator: "and",
   type: "group",
 });
 

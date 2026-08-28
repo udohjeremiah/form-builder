@@ -16,7 +16,7 @@ export interface BaseFieldAttributes {
  * is always satisfied.
  */
 export interface ConditionGroup {
-  combinator: "all" | "any";
+  combinator: "and" | "or";
   rules: FieldRule[];
 }
 
