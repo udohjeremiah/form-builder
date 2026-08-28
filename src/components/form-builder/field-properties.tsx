@@ -47,6 +47,8 @@ import {
   CONDITION_OPERATOR_LABELS,
   getFieldEntry,
   getOperatorsForType,
+  isMultiValueOperator,
+  isPresenceOperator,
 } from "@/lib/field-registry";
 
 type EffectKey = keyof FieldLogic;
@@ -107,10 +109,10 @@ const ConditionEditor = ({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem className="text-xs" value="all">
+            <SelectItem className="text-xs" value="and">
               All conditions
             </SelectItem>
-            <SelectItem className="text-xs" value="any">
+            <SelectItem className="text-xs" value="or">
               Any condition
             </SelectItem>
           </SelectContent>
@@ -135,7 +137,7 @@ const ConditionEditor = ({
               <div className="flex items-center gap-2 py-1.5">
                 <span className="h-px flex-1 bg-border/70" />
                 <span className="rounded-full bg-muted px-2 py-0.5 font-mono text-[9px] tracking-wide text-muted-foreground/60 uppercase">
-                  {group.combinator === "any" ? "or" : "and"}
+                  {group.combinator === "or" ? "or" : "and"}
                 </span>
                 <span className="h-px flex-1 bg-border/70" />
               </div>
@@ -205,23 +207,18 @@ const ConditionEditor = ({
                 </SelectContent>
               </Select>
 
-              {!["empty", "not_empty"].includes(rule.operator) && (
-                <Input
-                  className="h-7 font-mono text-xs"
-                  onChange={(event) => {
-                    updateRule(index, { value: event.target.value });
-                  }}
-                  placeholder="Expected value..."
-                  value={rule.value ?? ""}
-                />
-              )}
+              <RuleValueInput
+                index={index}
+                rule={rule}
+                updateRule={updateRule}
+              />
             </div>
           </div>
         );
       })}
 
       <Button
-        className="w-full border-dashed"
+        className="w-full"
         onClick={() => {
           onChange({ ...group, rules: [...group.rules, { ...NEW_RULE }] });
         }}
@@ -231,6 +228,53 @@ const ConditionEditor = ({
         <PlusIcon /> Add condition
       </Button>
     </div>
+  );
+};
+
+/**
+ * The expected-value editor for a single field rule. Renders nothing for
+ * presence operators, a one-per-line textarea for list operators, and a
+ * single-line input otherwise.
+ */
+const RuleValueInput = ({
+  index,
+  rule,
+  updateRule,
+}: {
+  index: number;
+  rule: FieldRule;
+  updateRule: (index: number, patch: Partial<FieldRule>) => void;
+}) => {
+  if (isPresenceOperator(rule.operator)) return null;
+
+  if (isMultiValueOperator(rule.operator)) {
+    return (
+      <Textarea
+        className="min-h-20 resize-none font-mono text-xs"
+        onChange={(event) => {
+          updateRule(index, {
+            value: event.target.value
+              .split("\n")
+              .filter((line) => line.trim().length > 0)
+              .join("\n"),
+          });
+        }}
+        placeholder="Enter each expected value on its own line..."
+        rows={3}
+        value={rule.value ?? ""}
+      />
+    );
+  }
+
+  return (
+    <Input
+      className="h-7 font-mono text-xs"
+      onChange={(event) => {
+        updateRule(index, { value: event.target.value });
+      }}
+      placeholder="Expected value..."
+      value={rule.value ?? ""}
+    />
   );
 };
 
@@ -702,7 +746,7 @@ export function FieldProperties({
                 if (v === "yes") {
                   setLogic({
                     ...field.logic,
-                    [activeEffect]: { combinator: "all", rules: [] },
+                    [activeEffect]: { combinator: "and", rules: [] },
                   });
                   return;
                 }

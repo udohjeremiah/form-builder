@@ -217,7 +217,7 @@ const SortableField = ({
         </div>
       </div>
 
-      <div className="-m-1 flex gap-0.5 rounded-sm p-1 opacity-40 transition-opacity group-hover:opacity-100">
+      <div className="flex gap-1.5 rounded-sm opacity-40 transition-opacity group-hover:opacity-100">
         <Button
           onClick={(event) => {
             event.stopPropagation();
@@ -394,11 +394,12 @@ export function FormCanvas({
         );
       })}
       <Button
-        className="w-full border-dashed text-xs"
+        className="w-full"
         onClick={(event) => {
           event.stopPropagation();
           onAddSection();
         }}
+        size="xs"
         variant="outline"
       >
         <PlusIcon className="size-3.5" />

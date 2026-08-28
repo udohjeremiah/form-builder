@@ -1,3 +1,5 @@
+import type { RulesDefinition } from "./rule-definition";
+
 export type AnyFieldDefinition = {
   [Type in FieldType]: FieldDefinition<Type>;
 }[FieldType];
@@ -14,7 +16,7 @@ export interface BaseFieldAttributes {
  * is always satisfied.
  */
 export interface ConditionGroup {
-  combinator: "all" | "any";
+  combinator: "and" | "or";
   rules: FieldRule[];
 }
 
@@ -24,11 +26,13 @@ export type ConditionOperator =
   | "eq"
   | "gt"
   | "gte"
+  | "in"
   | "lt"
   | "lte"
   | "neq"
   | "not_contains"
-  | "not_empty";
+  | "not_empty"
+  | "not_in";
 
 export interface DateTimeFieldAttributes extends BaseFieldAttributes {
   maxDate?: string;
@@ -118,6 +122,7 @@ export interface FileFieldAttributes extends BaseFieldAttributes {
 
 export interface FormDefinition {
   id: string;
+  rules: RulesDefinition;
   steps: StepDefinition[];
   version: number;
 }
