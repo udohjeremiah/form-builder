@@ -75,7 +75,7 @@ export function WhenEditor({
     );
   };
 
-  const color = useMemo(() => generateColor(), []);
+  const color = useMemo(() => generateColor("when"), []);
 
   return (
     <div
@@ -269,11 +269,10 @@ function NestedGroup({
           operator={child.operator}
         />
         <Button
-          className="shrink-0 text-muted-foreground/50 hover:bg-destructive/10 hover:text-destructive"
           onClick={onRemoveSelf}
           size="icon-xs"
           title="Remove group"
-          variant="ghost"
+          variant="destructive"
         >
           <XIcon className="size-3" />
         </Button>

@@ -26,11 +26,13 @@ export type ConditionOperator =
   | "eq"
   | "gt"
   | "gte"
+  | "in"
   | "lt"
   | "lte"
   | "neq"
   | "not_contains"
-  | "not_empty";
+  | "not_empty"
+  | "not_in";
 
 export interface DateTimeFieldAttributes extends BaseFieldAttributes {
   maxDate?: string;

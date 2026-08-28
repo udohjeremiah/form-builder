@@ -37,7 +37,7 @@ export function Combinator({
         }}
         value={operator}
       >
-        <SelectTrigger className="h-7 w-40 text-xs">
+        <SelectTrigger className="h-7 text-xs">
           <SelectValue>{operator}</SelectValue>
         </SelectTrigger>
         <SelectContent>

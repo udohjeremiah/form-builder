@@ -1,6 +1,5 @@
 import type {
   ComparisonCondition,
-  ComparisonOperator,
   Condition,
   Duration,
   ExistsCondition,
@@ -179,23 +178,6 @@ export const removeCondition = (
     ),
   };
 };
-
-export const COMPARISON_OPERATOR_LABELS: Readonly<
-  Record<ComparisonOperator, string>
-> = {
-  eq: "Equals",
-  gt: "Greater than",
-  gte: "Greater than or equal",
-  in: "Is one of",
-  lt: "Less than",
-  lte: "Less than or equal",
-  neq: "Does not equal",
-  not_in: "Is not one of",
-};
-
-export const COMPARISON_OPERATOR_LIST = Object.keys(
-  COMPARISON_OPERATOR_LABELS,
-) as ComparisonOperator[];
 
 export const RULE_STATUS_LABELS: Readonly<Record<RuleStatus, string>> = {
   NOT_QUALIFIED: "Not qualified",

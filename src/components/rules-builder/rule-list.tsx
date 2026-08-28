@@ -59,7 +59,7 @@ export function RuleList({
           <table className="w-full min-w-max border-collapse text-start">
             <thead>
               <tr className="border-b border-border bg-muted/40 font-mono text-[10px] tracking-wider text-muted-foreground/60 uppercase">
-                <th className="w-32 px-4 py-2 font-medium whitespace-nowrap">
+                <th className="w-32 px-4 py-2 text-start font-medium whitespace-nowrap">
                   Rule ID
                 </th>
                 <th className="w-40 px-4 py-2 font-medium whitespace-nowrap">
@@ -85,10 +85,10 @@ export function RuleList({
                   <td className="px-4 py-2.5 font-mono text-[11px] whitespace-nowrap text-muted-foreground">
                     {rule.id}
                   </td>
-                  <td className="px-4 py-2.5 text-[13px] whitespace-nowrap text-foreground">
+                  <td className="px-4 py-2.5 text-center text-[13px] whitespace-nowrap text-foreground">
                     {rule.area || "—"}
                   </td>
-                  <td className="px-4 py-2.5 text-[13px] whitespace-nowrap text-foreground/80">
+                  <td className="px-4 py-2.5 text-center text-[13px] whitespace-nowrap text-foreground/80">
                     {rule.outcome.adminReason || (
                       <span className="text-muted-foreground/40 italic">
                         No reason set

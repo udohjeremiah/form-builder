@@ -487,6 +487,9 @@ function evaluateRule(
     case "gte": {
       return compareValues(value, expected) >= 0;
     }
+    case "in": {
+      return listIncludes(expected, value);
+    }
     case "lt": {
       return compareValues(value, expected) < 0;
     }
@@ -502,8 +505,24 @@ function evaluateRule(
     case "not_empty": {
       return value.trim().length > 0;
     }
+    case "not_in": {
+      return !listIncludes(expected, value);
+    }
   }
 }
+
+/**
+ * Whether `candidate` is contained in a newline-separated list of expected
+ * values, ignoring empty lines (used by the `in` / `not_in` operators).
+ */
+function listIncludes(list: string, candidate: string): boolean {
+  return list
+    .split("\n")
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0)
+    .includes(candidate.trim());
+}
+
 
 const EMAIL_FORMAT = /^[^\s@]+@[^\s@][^\s.@]*\.[^\s@]+$/;
 

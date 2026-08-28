@@ -47,6 +47,8 @@ import {
   CONDITION_OPERATOR_LABELS,
   getFieldEntry,
   getOperatorsForType,
+  isMultiValueOperator,
+  isPresenceOperator,
 } from "@/lib/field-registry";
 
 type EffectKey = keyof FieldLogic;
@@ -205,16 +207,11 @@ const ConditionEditor = ({
                 </SelectContent>
               </Select>
 
-              {!["empty", "not_empty"].includes(rule.operator) && (
-                <Input
-                  className="h-7 font-mono text-xs"
-                  onChange={(event) => {
-                    updateRule(index, { value: event.target.value });
-                  }}
-                  placeholder="Expected value..."
-                  value={rule.value ?? ""}
-                />
-              )}
+              <RuleValueInput
+                index={index}
+                rule={rule}
+                updateRule={updateRule}
+              />
             </div>
           </div>
         );
@@ -231,6 +228,53 @@ const ConditionEditor = ({
         <PlusIcon /> Add condition
       </Button>
     </div>
+  );
+};
+
+/**
+ * The expected-value editor for a single field rule. Renders nothing for
+ * presence operators, a one-per-line textarea for list operators, and a
+ * single-line input otherwise.
+ */
+const RuleValueInput = ({
+  index,
+  rule,
+  updateRule,
+}: {
+  index: number;
+  rule: FieldRule;
+  updateRule: (index: number, patch: Partial<FieldRule>) => void;
+}) => {
+  if (isPresenceOperator(rule.operator)) return null;
+
+  if (isMultiValueOperator(rule.operator)) {
+    return (
+      <Textarea
+        className="min-h-20 resize-none font-mono text-xs"
+        onChange={(event) => {
+          updateRule(index, {
+            value: event.target.value
+              .split("\n")
+              .filter((line) => line.trim().length > 0)
+              .join("\n"),
+          });
+        }}
+        placeholder="Enter each expected value on its own line..."
+        rows={3}
+        value={rule.value ?? ""}
+      />
+    );
+  }
+
+  return (
+    <Input
+      className="h-7 font-mono text-xs"
+      onChange={(event) => {
+        updateRule(index, { value: event.target.value });
+      }}
+      placeholder="Expected value..."
+      value={rule.value ?? ""}
+    />
   );
 };
 

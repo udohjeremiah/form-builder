@@ -3,7 +3,10 @@
 import { XIcon } from "lucide-react";
 import { useMemo } from "react";
 
-import type { AnyFieldDefinition } from "@/types/form-definition";
+import type {
+  AnyFieldDefinition,
+  ConditionOperator,
+} from "@/types/form-definition";
 import type {
   ComparisonCondition,
   Condition,
@@ -19,10 +22,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { generateColor } from "@/lib/generate-color";
 import {
-  COMPARISON_OPERATOR_LABELS,
-  COMPARISON_OPERATOR_LIST,
+  CONDITION_OPERATOR_LABELS,
+  getOperatorsForType,
+  isMultiValueOperator,
+  isPresenceOperator,
+} from "@/lib/operators";
+import {
   newComparisonCondition,
   newExistsCondition,
   newReviewCondition,
@@ -33,6 +41,14 @@ const CONDITION_TYPES: { label: string; value: Condition["type"] }[] = [
   { label: "Exists", value: "exists" },
   { label: "Review", value: "review" },
 ];
+
+type ValueArity = "multi" | "none" | "single";
+
+const arityOf = (operator: ConditionOperator): ValueArity => {
+  if (isPresenceOperator(operator)) return "none";
+  if (isMultiValueOperator(operator)) return "multi";
+  return "single";
+};
 
 export function ConditionRow({
   allFields,
@@ -50,10 +66,10 @@ export function ConditionRow({
 
   return (
     <div
-      className="space-y-1.5 border-s-4 bg-background/60 p-2"
+      className="flex items-start gap-1.5 border-s-4 bg-background/60 p-2"
       style={{ borderInlineStartColor: color }}
     >
-      <div className="flex items-center gap-1.5">
+      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
         <Select
           onValueChange={(value) => {
             if (!value || value === condition.type) return;
@@ -67,7 +83,7 @@ export function ConditionRow({
           }}
           value={condition.type}
         >
-          <SelectTrigger className="h-7 w-full text-xs">
+          <SelectTrigger className="h-7 min-w-0 flex-1 text-xs">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -82,43 +98,43 @@ export function ConditionRow({
             ))}
           </SelectContent>
         </Select>
-        <Button
-          className="ms-auto shrink-0 text-muted-foreground/50 hover:bg-destructive/10 hover:text-destructive"
-          onClick={onRemove}
-          size="icon-xs"
-          title="Remove condition"
-          variant="ghost"
-        >
-          <XIcon className="size-3" />
-        </Button>
+
+        {condition.type === "comparison" && (
+          <ComparisonEditor
+            allFields={allFields}
+            condition={condition}
+            onChange={onChange}
+          />
+        )}
+
+        {condition.type === "exists" && (
+          <ExistsEditor
+            allFields={allFields}
+            condition={condition}
+            onChange={onChange}
+          />
+        )}
+
+        {condition.type === "review" && (
+          <Input
+            className="h-7 min-w-0 flex-1 basis-40 text-xs"
+            onChange={(event) => {
+              onChange({ ...condition, note: event.target.value });
+            }}
+            placeholder="Review instruction..."
+            value={condition.note}
+          />
+        )}
       </div>
 
-      {condition.type === "comparison" && (
-        <ComparisonEditor
-          allFields={allFields}
-          condition={condition}
-          onChange={onChange}
-        />
-      )}
-
-      {condition.type === "exists" && (
-        <ExistsEditor
-          allFields={allFields}
-          condition={condition}
-          onChange={onChange}
-        />
-      )}
-
-      {condition.type === "review" && (
-        <Input
-          className="h-7 text-xs"
-          onChange={(event) => {
-            onChange({ ...condition, note: event.target.value });
-          }}
-          placeholder="Review instruction..."
-          value={condition.note}
-        />
-      )}
+      <Button
+        onClick={onRemove}
+        size="icon-xs"
+        title="Remove condition"
+        variant="destructive"
+      >
+        <XIcon className="size-3" />
+      </Button>
     </div>
   );
 }
@@ -132,41 +148,102 @@ function ComparisonEditor({
   condition: ComparisonCondition;
   onChange: (condition: Condition) => void;
 }) {
+  const selectedField = allFields.find((field) => field.id === condition.field);
+  const fieldType = selectedField?.type ?? "text";
+  const operators = getOperatorsForType(fieldType);
+  const arity = arityOf(condition.operator);
+
   return (
     <>
       <FieldSelect
         allFields={allFields}
         onChange={(field) => {
-          onChange({ ...condition, field });
+          const next: ComparisonCondition = { ...condition, field };
+          const type = allFields.find((f) => f.id === field)?.type ?? "text";
+          const allowed = getOperatorsForType(type);
+          if (!allowed.includes(next.operator)) {
+            next.operator = allowed[0] ?? next.operator;
+            next.value = "";
+          }
+          onChange(next);
         }}
         value={condition.field}
       />
       <Select
         onValueChange={(operator) => {
-          if (operator) onChange({ ...condition, operator });
+          if (!operator || operator === condition.operator) return;
+          const next: ComparisonCondition = {
+            ...condition,
+            operator,
+          };
+          if (arityOf(next.operator) !== arityOf(condition.operator)) {
+            next.value = "";
+          }
+          onChange(next);
         }}
         value={condition.operator}
       >
-        <SelectTrigger className="h-7 w-full text-xs">
+        <SelectTrigger className="h-7 text-xs">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          {COMPARISON_OPERATOR_LIST.map((operator) => (
+          {operators.map((operator) => (
             <SelectItem className="text-xs" key={operator} value={operator}>
-              {COMPARISON_OPERATOR_LABELS[operator]}
+              {CONDITION_OPERATOR_LABELS[operator]}
             </SelectItem>
           ))}
         </SelectContent>
       </Select>
-      <Input
-        className="h-7 font-mono text-xs"
-        onChange={(event) => {
-          onChange({ ...condition, value: event.target.value });
-        }}
-        placeholder="Expected value(s) — comma separated..."
-        value={condition.value}
+
+      <ComparisonValueInput
+        arity={arity}
+        condition={condition}
+        onChange={onChange}
       />
     </>
+  );
+}
+
+function ComparisonValueInput({
+  arity,
+  condition,
+  onChange,
+}: {
+  arity: ValueArity;
+  condition: ComparisonCondition;
+  onChange: (condition: Condition) => void;
+}) {
+  if (arity === "none") return null;
+
+  if (arity === "multi") {
+    return (
+      <Textarea
+        className="min-h-20 basis-full resize-none font-mono text-xs"
+        onChange={(event) => {
+          onChange({
+            ...condition,
+            value: event.target.value
+              .split("\n")
+              .filter((line) => line.trim().length > 0)
+              .join("\n"),
+          });
+        }}
+        placeholder="Enter each expected value on its own line..."
+        rows={3}
+        value={condition.value}
+      />
+    );
+  }
+
+  return (
+    <Input
+      className="h-7 min-w-0 flex-1 basis-40 font-mono text-xs"
+      onChange={(event) => {
+        onChange({ ...condition, value: event.target.value });
+      }}
+      placeholder="Expected value..."
+      value={condition.value}
+    />
   );
 }
 
@@ -194,7 +271,7 @@ function ExistsEditor({
         }}
         value={condition.present ? "true" : "false"}
       >
-        <SelectTrigger className="h-7 w-full text-xs">
+        <SelectTrigger className="h-7 min-w-0 flex-1 text-xs">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -226,7 +303,7 @@ function FieldSelect({
       }}
       value={value}
     >
-      <SelectTrigger className="h-7 w-full text-xs">
+      <SelectTrigger className="h-7 min-w-0 flex-1 text-xs">
         <SelectValue placeholder="Select a field..." />
       </SelectTrigger>
       <SelectContent>

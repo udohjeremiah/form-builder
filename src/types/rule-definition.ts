@@ -1,12 +1,11 @@
+import type { ConditionOperator } from "@/types/form-definition";
+
 export interface ComparisonCondition {
   field: string;
-  operator: ComparisonOperator;
+  operator: ConditionOperator;
   type: "comparison";
   value: string;
 }
-
-export type ComparisonOperator =
-  "eq" | "gt" | "gte" | "in" | "lt" | "lte" | "neq" | "not_in";
 
 /**
  * A single node in the rule's WHEN tree. Evaluated against an assessment

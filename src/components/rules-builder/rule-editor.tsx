@@ -62,7 +62,7 @@ export function RuleEditor({
           </span>
         </div>
         <div
-          className="space-y-3 border-s-4 bg-background/40 p-4"
+          className="space-y-3 border-s-4 bg-background/40 p-2"
           style={{ borderInlineStartColor: color }}
         >
           <div className="space-y-1">
