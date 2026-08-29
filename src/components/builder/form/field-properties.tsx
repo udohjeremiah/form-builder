@@ -174,15 +174,16 @@ const ConditionEditor = ({
                       ))}
                   </SelectContent>
                 </Select>
-                <button
-                  className="shrink-0 rounded-md p-1 text-muted-foreground/50 transition-colors hover:bg-destructive/10 hover:text-destructive"
+                <Button
                   onClick={() => {
                     removeRule(index);
                   }}
                   title="Remove condition"
+                  size="icon-xs"
+                  variant="destructive"
                 >
                   <XIcon className="size-3" />
-                </button>
+                </Button>
               </div>
 
               <Select
@@ -438,7 +439,7 @@ export function FieldProperties({
       <div className="space-y-3">
         <div className="space-y-1">
           <Label className="text-[11px] font-medium text-muted-foreground/70">
-            Label
+            Label <span className="text-destructive">*</span>
           </Label>
           <Input
             className="h-8 text-[13px]"

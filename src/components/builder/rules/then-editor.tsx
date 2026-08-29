@@ -52,7 +52,7 @@ export function ThenEditor({
     >
       <div className="space-y-1 pb-5">
         <Label className="text-[11px] font-medium text-muted-foreground/70">
-          Status
+          Status <span className="text-destructive">*</span>
         </Label>
         <Select
           disabled={disabled}
@@ -76,7 +76,7 @@ export function ThenEditor({
 
       <div className="space-y-1 pb-5">
         <Label className="text-[11px] font-medium text-muted-foreground/70">
-          Admin reason
+          Admin reason <span className="text-destructive">*</span>
         </Label>
         <Textarea
           className="resize-none text-xs"
@@ -92,7 +92,7 @@ export function ThenEditor({
 
       <div className="space-y-1 pb-5">
         <Label className="text-[11px] font-medium text-muted-foreground/70">
-          Student action (optional)
+          Student action
         </Label>
         <Input
           className="h-8 text-[13px]"
@@ -112,7 +112,7 @@ export function ThenEditor({
       <div className="space-y-1 pb-5">
         <div className="flex items-center justify-between">
           <Label className="text-[11px] font-medium text-muted-foreground/70">
-            Deadline (optional)
+            Deadline
           </Label>
           {outcome.deadline && (
             <Button

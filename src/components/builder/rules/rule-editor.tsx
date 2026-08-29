@@ -71,7 +71,7 @@ export function RuleEditor({
         >
           <div className="space-y-1">
             <Label className="text-[11px] font-medium text-muted-foreground/70">
-              Area
+              Area <span className="text-destructive">*</span>
             </Label>
             <Input
               className="h-8 text-[13px]"
