@@ -3,15 +3,19 @@
 import { ChevronLeftIcon, Trash2Icon } from "lucide-react";
 import { useMemo } from "react";
 
-import type { AnyFieldDefinition } from "@/types/form-definition";
-import type { Condition, GroupCondition, Rule } from "@/types/rule-definition";
-
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { generateColor } from "@/lib/generate-color";
-import { newGroupCondition } from "@/lib/rule-definition";
 
+import type {
+  AnyFieldDefinition,
+  Condition,
+  GroupCondition,
+  Rule,
+} from "../index";
+
+import { newGroupCondition } from "./rule-definition";
 import { ThenEditor } from "./then-editor";
 import { WhenEditor } from "./when-editor";
 

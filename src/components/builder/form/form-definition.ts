@@ -1,21 +1,18 @@
 import type {
   AnyFieldDefinition,
+  Condition,
   ConditionGroup,
   FieldRule,
   FieldType,
   FormDefinition,
-  PersistedFormDefinition,
+  Rule,
   SectionAttributes,
   SectionDefinition,
   StepAttributes,
   StepDefinition,
-} from "@/types/form-definition";
-import type { RulesDefinition } from "@/types/rule-definition";
+} from "../index";
 
-import { getFieldEntry } from "@/lib/field-registry";
-import { newRulesDefinition } from "@/lib/rule-definition";
-
-const FORM_DEFINITION_VERSION = 2;
+import { getFieldEntry } from "./field-registry";
 
 // Random, position-independent identifiers: nothing encodes order or time,
 // so ids survive reordering and never collide across restored drafts.
@@ -31,9 +28,7 @@ const randomId = (prefix: string): string => {
 };
 
 const newFieldId = () => randomId("fld");
-
 const newSectionId = () => randomId("sec");
-
 const newStepId = () => randomId("st");
 
 const createSection = (
@@ -56,8 +51,7 @@ const createStepDefinition = (): StepDefinition => {
 export const createDefaultDefinition = (): FormDefinition => ({
   // Deterministic ids keep the prerendered scaffold identical on the server
   // and client; anything added through the builder gets random ids instead.
-  id: "frm_seed",
-  rules: newRulesDefinition(),
+  rules: [],
   steps: [
     {
       attributes: {},
@@ -65,7 +59,6 @@ export const createDefaultDefinition = (): FormDefinition => ({
       sections: [{ attributes: {}, fields: [], id: "sec_seed" }],
     },
   ],
-  version: FORM_DEFINITION_VERSION,
 });
 
 export const newField = (type: FieldType): AnyFieldDefinition => {
@@ -455,11 +448,9 @@ function evaluateGroup(
   values: Record<string, string>,
 ): boolean {
   if (group.rules.length === 0) return true;
-
   // A row without a target field cannot constrain anything.
   const passes = (rule: FieldRule) =>
     !rule.fieldId || evaluateRule(rule, values);
-
   return group.combinator === "or"
     ? group.rules.some((rule) => passes(rule))
     : group.rules.every((rule) => passes(rule));
@@ -523,7 +514,6 @@ function listIncludes(list: string, candidate: string): boolean {
     .includes(candidate.trim());
 }
 
-
 const EMAIL_FORMAT = /^[^\s@]+@[^\s@][^\s.@]*\.[^\s@]+$/;
 
 export function validateFieldValue(
@@ -534,9 +524,7 @@ export function validateFieldValue(
   if (attributes.required && !value.trim()) {
     return `${attributes.label} is required`;
   }
-
   if (!value && !attributes.required) return null;
-
   switch (field.type) {
     case "email":
     case "password":
@@ -582,84 +570,44 @@ export function validateFieldValue(
       break;
     }
   }
-
   return null;
 }
 
 /**
- * Coerces the persisted `rules` member into a standalone `RulesDefinition`.
- * Handles both the current object shape ({ id, version, rules }) and the
- * legacy bare array that predates the standalone rules schema.
+ * Evaluates a single condition node. A group is complete only when it has at
+ * least one child and every child is complete.
  */
-const normalizeRules = (raw: unknown): RulesDefinition => {
-  if (typeof raw === "object" && raw !== null) {
-    const candidate = raw as {
-      id?: unknown;
-      rules?: unknown;
-      version?: unknown;
-    };
-    if (
-      typeof candidate.id === "string" &&
-      typeof candidate.version === "number" &&
-      Array.isArray(candidate.rules)
-    ) {
-      return {
-        id: candidate.id,
-        rules: candidate.rules as RulesDefinition["rules"],
-        version: candidate.version,
-      };
+const isConditionComplete = (condition: Condition): boolean => {
+  switch (condition.type) {
+    case "comparison":
+    case "exists": {
+      return condition.field.trim().length > 0;
+    }
+    case "group": {
+      return (
+        condition.conditions.length > 0 &&
+        condition.conditions.every((child) => isConditionComplete(child))
+      );
+    }
+    case "review": {
+      return true;
     }
   }
-  if (Array.isArray(raw)) {
-    return { ...newRulesDefinition(), rules: raw as RulesDefinition["rules"] };
-  }
-  return newRulesDefinition();
 };
 
 /**
- * Validates persisted JSON against the current canonical structure and
- * normalizes `savedAt`. Returns null when the payload does not match.
+ * A rule is complete when its WHEN tree is fully populated. Its outcome is
+ * always assigned a status by the editor, so only the condition is checked.
  */
-export const normalizePersisted = (
-  raw: unknown,
-): null | PersistedFormDefinition => {
-  if (typeof raw !== "object" || raw === null) return null;
-  // Deliberately permissive view of the payload: persisted JSON is untrusted,
-  // so every member stays nullable until validated below.
-  const data = raw as {
-    id?: unknown;
-    rules?: unknown;
-    savedAt?: unknown;
-    steps?: unknown;
-    version?: unknown;
-  };
-  const savedAt = typeof data.savedAt === "number" ? data.savedAt : 0;
+export const isRuleComplete = (rule: Rule): boolean =>
+  Boolean(rule.condition) && isConditionComplete(rule.condition);
 
-  // Accept both the current schema version and the legacy v1 payloads (which
-  // predate rules) so persisted drafts keep loading after the field is added.
-  const versionNumber =
-    typeof data.version === "number" ? data.version : FORM_DEFINITION_VERSION;
-  const versionSupported =
-    versionNumber === FORM_DEFINITION_VERSION || versionNumber === 1;
-
-  if (
-    versionSupported &&
-    typeof data.id === "string" &&
-    Array.isArray(data.steps) &&
-    (data.steps as FormDefinition["steps"]).every(
-      (step) =>
-        typeof step.id === "string" &&
-        Array.isArray(step.sections) &&
-        step.sections.length > 0,
-    )
-  ) {
-    return {
-      id: data.id,
-      rules: normalizeRules(data.rules),
-      savedAt,
-      steps: data.steps as FormDefinition["steps"],
-      version: FORM_DEFINITION_VERSION,
-    };
-  }
-  return null;
+/**
+ * A definition is "complete" when it is ready to be published: it contains at
+ * least one field and every assessment rule's condition is fully populated.
+ * Used by `Builder` to derive its `completed` state and `onComplete`.
+ */
+export const isDefinitionComplete = (definition: FormDefinition): boolean => {
+  if (getAllFields(definition).length === 0) return false;
+  return definition.rules.every((rule) => isRuleComplete(rule));
 };

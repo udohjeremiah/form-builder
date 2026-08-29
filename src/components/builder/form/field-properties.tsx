@@ -3,13 +3,6 @@
 import { PlusIcon, XIcon } from "lucide-react";
 import { Fragment } from "react";
 
-import type {
-  AnyFieldDefinition,
-  ConditionGroup,
-  FieldLogic,
-  FieldRule,
-} from "@/types/form-definition";
-
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -42,6 +35,14 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/cn";
+
+import type {
+  AnyFieldDefinition,
+  ConditionGroup,
+  FieldLogic,
+  FieldRule,
+} from "../index";
+
 import {
   AUTOCOMPLETE_OPTIONS,
   CONDITION_OPERATOR_LABELS,
@@ -49,7 +50,7 @@ import {
   getOperatorsForType,
   isMultiValueOperator,
   isPresenceOperator,
-} from "@/lib/field-registry";
+} from "./field-registry";
 
 type EffectKey = keyof FieldLogic;
 

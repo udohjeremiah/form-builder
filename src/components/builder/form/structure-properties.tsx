@@ -1,15 +1,12 @@
 "use client";
 
-import type {
-  SectionAttributes,
-  StepAttributes,
-} from "@/types/form-definition";
-
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/cn";
+
+import type { SectionAttributes, StepAttributes } from "../index";
 
 export type StructureNode =
   | { attributes: SectionAttributes; id: string; kind: "section" }

@@ -2,7 +2,7 @@ import type {
   BaseFieldAttributes,
   FieldAttributesByType,
   FieldType,
-} from "@/types/form-definition";
+} from "../index";
 
 export const AUTOCOMPLETE_OPTIONS: {
   readonly label: string;
@@ -431,7 +431,7 @@ export {
   getOperatorsForType,
   isMultiValueOperator,
   isPresenceOperator,
-} from "@/lib/operators";
+} from "../operators";
 
 export const FIELD_TYPE_LIST = Object.values(FIELD_REGISTRY);
 

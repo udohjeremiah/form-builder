@@ -1,7 +1,5 @@
 "use client";
 
-import type { GroupCondition } from "@/types/rule-definition";
-
 import {
   Select,
   SelectContent,
@@ -9,6 +7,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+
+import type { GroupCondition } from "../index";
 
 const MATCH_OPTIONS: Record<GroupCondition["operator"], string> = {
   and: "All conditions",

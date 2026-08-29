@@ -3,16 +3,6 @@
 import { XIcon } from "lucide-react";
 import { useMemo } from "react";
 
-import type {
-  AnyFieldDefinition,
-  ConditionOperator,
-} from "@/types/form-definition";
-import type {
-  ComparisonCondition,
-  Condition,
-  ExistsCondition,
-} from "@/types/rule-definition";
-
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -24,17 +14,26 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { generateColor } from "@/lib/generate-color";
+
+import type {
+  AnyFieldDefinition,
+  ComparisonCondition,
+  Condition,
+  ConditionOperator,
+  ExistsCondition,
+} from "../index";
+
 import {
   CONDITION_OPERATOR_LABELS,
   getOperatorsForType,
   isMultiValueOperator,
   isPresenceOperator,
-} from "@/lib/operators";
+} from "../operators";
 import {
   newComparisonCondition,
   newExistsCondition,
   newReviewCondition,
-} from "@/lib/rule-definition";
+} from "./rule-definition";
 
 const CONDITION_TYPES: { label: string; value: Condition["type"] }[] = [
   { label: "Comparison", value: "comparison" },

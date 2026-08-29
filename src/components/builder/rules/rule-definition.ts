@@ -6,11 +6,8 @@ import type {
   GroupCondition,
   ReviewCondition,
   Rule,
-  RulesDefinition,
   RuleStatus,
-} from "@/types/rule-definition";
-
-const RULES_DEFINITION_VERSION = 1;
+} from "../index";
 
 // Random, position-independent identifiers: nothing encodes order or time,
 // so ids survive reordering and never collide across restored drafts.
@@ -26,8 +23,6 @@ const randomId = (prefix: string): string => {
 };
 
 const newRuleId = () => randomId("rule");
-
-const newRulesId = () => randomId("rules");
 
 export const newComparisonCondition = (field = ""): ComparisonCondition => ({
   field,
@@ -66,41 +61,17 @@ export const newRule = (): Rule => ({
   },
 });
 
-/**
- * A fresh, empty rules schema document with its own stable id and version.
- */
-export const newRulesDefinition = (): RulesDefinition => ({
-  id: newRulesId(),
-  rules: [],
-  version: RULES_DEFINITION_VERSION,
-});
+export const addRule = (rules: Rule[], rule: Rule): Rule[] => [...rules, rule];
 
-export const addRule = (
-  definition: RulesDefinition,
-  rule: Rule,
-): RulesDefinition => ({
-  ...definition,
-  rules: [...definition.rules, rule],
-});
-
-export const removeRule = (
-  definition: RulesDefinition,
-  id: string,
-): RulesDefinition => ({
-  ...definition,
-  rules: definition.rules.filter((rule) => rule.id !== id),
-});
+export const removeRule = (rules: Rule[], id: string): Rule[] =>
+  rules.filter((rule) => rule.id !== id);
 
 export const updateRule = (
-  definition: RulesDefinition,
+  rules: Rule[],
   id: string,
   patch: Partial<Rule>,
-): RulesDefinition => ({
-  ...definition,
-  rules: definition.rules.map((rule) =>
-    rule.id === id ? { ...rule, ...patch } : rule,
-  ),
-});
+): Rule[] =>
+  rules.map((rule) => (rule.id === id ? { ...rule, ...patch } : rule));
 
 /**
  * Copies the tree and replaces a single node located by `path` (an array of
@@ -199,27 +170,3 @@ export const DURATION_UNIT_LABELS: Readonly<Record<Duration["unit"], string>> =
 export const DURATION_UNIT_LIST = Object.keys(
   DURATION_UNIT_LABELS,
 ) as Duration["unit"][];
-
-/**
- * Validates a persisted standalone rules payload against the canonical
- * structure, returning null when the JSON does not match.
- */
-export const normalizeRulesDefinition = (
-  raw: unknown,
-): null | RulesDefinition => {
-  if (typeof raw !== "object" || raw === null) return null;
-  // Deliberately permissive view of the payload: persisted JSON is untrusted.
-  const data = raw as { id?: unknown; rules?: unknown; version?: unknown };
-  if (
-    typeof data.id === "string" &&
-    typeof data.version === "number" &&
-    Array.isArray(data.rules)
-  ) {
-    return {
-      id: data.id,
-      rules: data.rules as RulesDefinition["rules"],
-      version: data.version,
-    };
-  }
-  return null;
-};

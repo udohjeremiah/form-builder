@@ -1,4 +1,4 @@
-import type { ConditionOperator, FieldType } from "@/types/form-definition";
+import type { ConditionOperator, FieldType } from "./index";
 
 export const CONDITION_OPERATOR_LABELS: Readonly<
   Record<ConditionOperator, string>
@@ -93,10 +93,8 @@ export const getOperatorsForType = (
   type: FieldType,
 ): readonly ConditionOperator[] => OPERATORS_BY_FIELD_TYPE[type];
 
-export const isMultiValueOperator = (
-  operator: ConditionOperator,
-): boolean => MULTI_VALUE_OPERATORS.has(operator);
+export const isMultiValueOperator = (operator: ConditionOperator): boolean =>
+  MULTI_VALUE_OPERATORS.has(operator);
 
-export const isPresenceOperator = (
-  operator: ConditionOperator,
-): boolean => PRESENCE_OPERATORS.has(operator);
+export const isPresenceOperator = (operator: ConditionOperator): boolean =>
+  PRESENCE_OPERATORS.has(operator);

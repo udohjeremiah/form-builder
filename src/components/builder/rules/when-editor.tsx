@@ -3,20 +3,19 @@
 import { FolderPlusIcon, PlusIcon, XIcon } from "lucide-react";
 import { useMemo } from "react";
 
-import type { AnyFieldDefinition } from "@/types/form-definition";
-import type { Condition, GroupCondition } from "@/types/rule-definition";
-
 import { Button } from "@/components/ui/button";
 import { generateColor } from "@/lib/generate-color";
+
+import type { AnyFieldDefinition, Condition, GroupCondition } from "../index";
+
+import { Combinator } from "./combinator";
+import { ConditionRow } from "./condition-row";
 import {
   newComparisonCondition,
   newGroupCondition,
   removeCondition,
   updateCondition,
-} from "@/lib/rule-definition";
-
-import { Combinator } from "./combinator";
-import { ConditionRow } from "./condition-row";
+} from "./rule-definition";
 
 interface CondCallbacks {
   allFields: AnyFieldDefinition[];

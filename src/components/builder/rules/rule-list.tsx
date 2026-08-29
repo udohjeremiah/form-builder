@@ -2,12 +2,13 @@
 
 import { PlusIcon } from "lucide-react";
 
-import type { Rule, RuleStatus } from "@/types/rule-definition";
-
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
-import { RULE_STATUS_LABELS } from "@/lib/rule-definition";
+
+import type { Rule, RuleStatus } from "../index";
+
+import { RULE_STATUS_LABELS } from "./rule-definition";
 
 const statusTone: Record<RuleStatus, string> = {
   NOT_QUALIFIED: "border-destructive/30 bg-destructive/10 text-destructive",

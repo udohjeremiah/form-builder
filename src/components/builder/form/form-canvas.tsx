@@ -12,14 +12,14 @@ import {
   XIcon,
 } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/cn";
+
 import type {
   AnyFieldDefinition,
   SectionDefinition,
   StepDefinition,
-} from "@/types/form-definition";
-
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/cn";
+} from "../index";
 
 interface CanvasSection {
   section: SectionDefinition;

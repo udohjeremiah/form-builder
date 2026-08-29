@@ -3,8 +3,6 @@
 import { PlusIcon, XIcon } from "lucide-react";
 import { useMemo } from "react";
 
-import type { RuleOutcome } from "@/types/rule-definition";
-
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,12 +15,15 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { generateColor } from "@/lib/generate-color";
+
+import type { RuleOutcome } from "../index";
+
 import {
   DURATION_UNIT_LABELS,
   DURATION_UNIT_LIST,
   RULE_STATUS_LABELS,
   RULE_STATUS_LIST,
-} from "@/lib/rule-definition";
+} from "./rule-definition";
 
 const parseNumber = (raw: string): number | undefined => {
   if (raw.trim() === "") return undefined;

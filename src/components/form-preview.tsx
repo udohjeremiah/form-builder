@@ -16,8 +16,15 @@ import type {
   AnyFieldDefinition,
   FormDefinition,
   StepDefinition,
-} from "@/types/form-definition";
+} from "@/components/builder";
 
+import {
+  getActiveOptions,
+  getAllFields,
+  isFieldDisabled,
+  isFieldVisible,
+  validateFieldValue,
+} from "@/components/builder/form/form-definition";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -41,13 +48,6 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/cn";
-import {
-  getActiveOptions,
-  getAllFields,
-  isFieldDisabled,
-  isFieldVisible,
-  validateFieldValue,
-} from "@/lib/form-definition";
 
 const FieldInput = ({
   disabled,
@@ -658,7 +658,7 @@ export function FormPreview({ definition }: { definition: FormDefinition }) {
 
   return (
     <div className="flex h-full flex-1 flex-col">
-      <div className="flex-1 overflow-y-auto p-8">
+      <div className="flex-1 overflow-y-auto p-6">
         {allFields.length === 0 ? (
           <div className="flex h-full items-center justify-center">
             <p className="font-mono text-sm text-muted-foreground">

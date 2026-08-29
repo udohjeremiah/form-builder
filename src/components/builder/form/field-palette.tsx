@@ -25,11 +25,12 @@ import {
   UploadIcon,
 } from "lucide-react";
 
-import type { FieldType } from "@/types/form-definition";
-
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/cn";
-import { FIELD_TYPE_LIST } from "@/lib/field-registry";
+
+import type { FieldType } from "../index";
+
+import { FIELD_TYPE_LIST } from "./field-registry";
 
 const iconMap: Record<string, React.FC<{ className?: string }>> = {
   AlignLeftIcon,
