@@ -38,6 +38,7 @@ function ComboboxChip({
           className="-ms-0.5 size-4.5 opacity-50 hover:opacity-100 aria-disabled:pointer-events-none"
           data-slot="combobox-chip-remove"
           render={<Button size="icon-xs" variant="ghost" />}
+          title="Remove"
         >
           <XIcon className="pointer-events-none" />
         </ComboboxPrimitive.ChipRemove>
@@ -82,6 +83,7 @@ function ComboboxClear({ className, ...props }: ComboboxPrimitive.Clear.Props) {
       className={cn(className)}
       data-slot="combobox-clear"
       render={<InputGroupButton size="icon-xs" variant="ghost" />}
+      title="Clear"
       {...props}
     >
       <XIcon className="pointer-events-none" />

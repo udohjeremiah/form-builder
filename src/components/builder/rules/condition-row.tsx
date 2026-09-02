@@ -1,7 +1,7 @@
 "use client";
 
 import { XIcon } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,12 +23,14 @@ import type {
   ExistsCondition,
 } from "../index";
 
+import { getActiveOptions } from "../form/form-definition";
 import {
   CONDITION_OPERATOR_LABELS,
   getOperatorsForType,
   isMultiValueOperator,
   isPresenceOperator,
 } from "../operators";
+import { OptionsValueInput } from "../options-value-input";
 import {
   newComparisonCondition,
   newExistsCondition,
@@ -198,6 +200,7 @@ function ComparisonEditor({
         arity={arity}
         condition={condition}
         onChange={onChange}
+        options={selectedField ? getActiveOptions(selectedField) : []}
       />
     </>
   );
@@ -207,38 +210,39 @@ function ComparisonValueInput({
   arity,
   condition,
   onChange,
+  options,
 }: {
   arity: ValueArity;
   condition: ComparisonCondition;
   onChange: (condition: Condition) => void;
+  options: string[];
 }) {
   if (arity === "none") return null;
 
-  if (arity === "multi") {
+  const setValue = (value: string) => {
+    onChange({ ...condition, value });
+  };
+
+  if (options.length > 0) {
     return (
-      <Textarea
-        className="min-h-20 basis-full resize-none font-mono text-xs"
-        onChange={(event) => {
-          onChange({
-            ...condition,
-            value: event.target.value
-              .split("\n")
-              .filter((line) => line.trim().length > 0)
-              .join("\n"),
-          });
-        }}
-        placeholder="Enter each expected value on its own line..."
-        rows={3}
+      <OptionsValueInput
+        onChange={setValue}
+        operator={condition.operator}
+        options={options}
         value={condition.value}
       />
     );
+  }
+
+  if (arity === "multi") {
+    return <MultiValueTextarea condition={condition} onChange={setValue} />;
   }
 
   return (
     <Input
       className="h-7 min-w-0 flex-1 basis-40 font-mono text-xs"
       onChange={(event) => {
-        onChange({ ...condition, value: event.target.value });
+        setValue(event.target.value);
       }}
       placeholder="Expected value..."
       value={condition.value}
@@ -313,5 +317,42 @@ function FieldSelect({
         ))}
       </SelectContent>
     </Select>
+  );
+}
+
+function MultiValueTextarea({
+  condition,
+  onChange,
+}: {
+  condition: ComparisonCondition;
+  onChange: (value: string) => void;
+}) {
+  // Commit on blur rather than every keystroke: committing live strips the
+  // trailing blank line just created with Enter (the model drops empty lines),
+  // so a new line would vanish. The draft keeps the raw text locally and the
+  // cleaned list is committed on blur. Re-mounting per field+operator reseeds
+  // it when the referenced field or operator changes.
+  const [draft, setDraft] = useState(() => condition.value);
+  const reseedKey = `${condition.field}:${condition.operator}`;
+
+  return (
+    <Textarea
+      className="max-h-32 basis-full resize-none overflow-y-auto font-mono text-xs"
+      key={reseedKey}
+      onBlur={() => {
+        onChange(
+          draft
+            .split("\n")
+            .filter((line) => line.trim().length > 0)
+            .join("\n"),
+        );
+      }}
+      onChange={(event) => {
+        setDraft(event.target.value);
+      }}
+      placeholder="Enter each expected value on its own line..."
+      rows={3}
+      value={draft}
+    />
   );
 }

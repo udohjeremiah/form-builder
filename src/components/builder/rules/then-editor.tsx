@@ -79,7 +79,7 @@ export function ThenEditor({
           Admin reason <span className="text-destructive">*</span>
         </Label>
         <Textarea
-          className="resize-none text-xs"
+          className="max-h-40 resize-none overflow-y-auto text-xs"
           disabled={disabled}
           onChange={(event) => {
             onChange({ ...outcome, adminReason: event.target.value });

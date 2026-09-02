@@ -4,6 +4,7 @@ import { FolderPlusIcon, PlusIcon, XIcon } from "lucide-react";
 import { useMemo } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Empty, EmptyDescription, EmptyHeader } from "@/components/ui/empty";
 import { generateColor } from "@/lib/generate-color";
 
 import type { AnyFieldDefinition, Condition, GroupCondition } from "../index";
@@ -162,9 +163,11 @@ function GroupChildren({
 
   if (conditions.length === 0) {
     return (
-      <p className="rounded-md border border-dashed border-border/70 py-3 text-center text-[11px] text-muted-foreground/60">
-        No conditions yet. Add one below.
-      </p>
+      <Empty className="border border-dashed">
+        <EmptyHeader>
+          <EmptyDescription>No conditions yet. Add one below.</EmptyDescription>
+        </EmptyHeader>
+      </Empty>
     );
   }
 

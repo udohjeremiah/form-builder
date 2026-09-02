@@ -147,8 +147,17 @@ const FIELD_REGISTRY: {
   readonly [Type in FieldType]: FieldRegistryEntry<Type>;
 } = {
   checkbox: {
-    attributes: [],
-    defaults: () => ({}),
+    attributes: [
+      {
+        key: "options",
+        kind: "lines",
+        label: "Options",
+        placeholder: "One per line",
+      },
+    ],
+    defaults: () => ({
+      options: ["Option 1", "Option 2", "Option 3"],
+    }),
     icon: "CheckSquareIcon",
     label: "Checkbox",
     type: "checkbox",

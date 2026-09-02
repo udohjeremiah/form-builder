@@ -10,7 +10,7 @@ import {
   StarIcon,
   UploadIcon,
 } from "lucide-react";
-import { Fragment, useCallback, useState } from "react";
+import { Fragment, useState } from "react";
 
 import type {
   AnyFieldDefinition,
@@ -73,26 +73,39 @@ const FieldInput = ({
 
   switch (field.type) {
     case "checkbox": {
+      const options = getActiveOptions(field).filter(Boolean);
+      const choices = options.length > 0 ? options : ["Option 1", "Option 2"];
+      const selected = value.split(",").filter(Boolean);
+      const toggle = (option: string) => {
+        const next = selected.includes(option)
+          ? selected.filter((item) => item !== option)
+          : [...selected, option];
+        onChange(next.join(","));
+        onBlur();
+      };
       return (
-        <div className="flex items-center gap-3">
-          <Checkbox
-            checked={value === "true"}
-            disabled={disabled}
-            id={field.id}
-            onCheckedChange={(checked) => {
-              onChange(String(checked));
-              onBlur();
-            }}
-          />
-          <Label
-            className={cn(
-              "text-sm font-normal text-foreground",
-              disabled ? "cursor-default opacity-60" : "cursor-pointer",
-            )}
-            htmlFor={field.id}
-          >
-            {field.attributes.placeholder ?? field.attributes.label}
-          </Label>
+        <div className="space-y-2">
+          {choices.map((option) => (
+            <div className="flex items-center gap-3" key={option}>
+              <Checkbox
+                checked={selected.includes(option)}
+                disabled={disabled}
+                id={`${field.id}-${option}`}
+                onCheckedChange={() => {
+                  toggle(option);
+                }}
+              />
+              <Label
+                className={cn(
+                  "text-sm font-normal text-foreground",
+                  disabled ? "cursor-default opacity-60" : "cursor-pointer",
+                )}
+                htmlFor={`${field.id}-${option}`}
+              >
+                {option}
+              </Label>
+            </div>
+          ))}
         </div>
       );
     }
@@ -587,7 +600,9 @@ export function FormPreview({ definition }: { definition: FormDefinition }) {
   const visibleGroups = renderedSections
     .map((section) => ({
       attributes: section.attributes,
-      fields: section.fields.filter((f) => isFieldVisible(f, values)),
+      fields: section.fields.filter((f) =>
+        isFieldVisible(f, values, allFields),
+      ),
       id: section.id,
     }))
     .filter((group) => group.fields.length > 0);
@@ -605,33 +620,27 @@ export function FormPreview({ definition }: { definition: FormDefinition }) {
   const isLastStep = currentStep === steps.length - 1;
   const isFirstStep = currentStep === 0;
 
-  const handleChange = useCallback(
-    (fieldId: string, value: string) => {
-      setValues((previous) => ({ ...previous, [fieldId]: value }));
-      const field = allFields.find((f) => f.id === fieldId);
-      if (field && touched[fieldId]) {
-        setErrors((previous) => ({
-          ...previous,
-          [fieldId]: validateFieldValue(field, value),
-        }));
-      }
-    },
-    [allFields, touched],
-  );
+  const handleChange = (fieldId: string, value: string) => {
+    setValues((previous) => ({ ...previous, [fieldId]: value }));
+    const field = allFields.find((f) => f.id === fieldId);
+    if (field && touched[fieldId]) {
+      setErrors((previous) => ({
+        ...previous,
+        [fieldId]: validateFieldValue(field, value),
+      }));
+    }
+  };
 
-  const handleBlur = useCallback(
-    (fieldId: string) => {
-      setTouched((previous) => ({ ...previous, [fieldId]: true }));
-      const field = allFields.find((f) => f.id === fieldId);
-      if (field) {
-        setErrors((previous) => ({
-          ...previous,
-          [fieldId]: validateFieldValue(field, values[fieldId] ?? ""),
-        }));
-      }
-    },
-    [allFields, values],
-  );
+  const handleBlur = (fieldId: string) => {
+    setTouched((previous) => ({ ...previous, [fieldId]: true }));
+    const field = allFields.find((f) => f.id === fieldId);
+    if (field) {
+      setErrors((previous) => ({
+        ...previous,
+        [fieldId]: validateFieldValue(field, values[fieldId] ?? ""),
+      }));
+    }
+  };
 
   const validateStep = () => {
     let hasErrors = false;
@@ -639,7 +648,7 @@ export function FormPreview({ definition }: { definition: FormDefinition }) {
     const newTouched: Record<string, boolean> = {};
     for (const field of visibleFields) {
       // Disabled fields cannot be filled in, so they must not block submit.
-      if (isFieldDisabled(field, values)) continue;
+      if (isFieldDisabled(field, values, allFields)) continue;
       newTouched[field.id] = true;
       const error = validateFieldValue(field, values[field.id] ?? "");
       newErrors[field.id] = error;
@@ -718,7 +727,11 @@ export function FormPreview({ definition }: { definition: FormDefinition }) {
                       {group.fields.map((field, fieldIndex) => {
                         const fieldError = errors[field.id];
                         const fieldTouched = touched[field.id];
-                        const fieldDisabled = isFieldDisabled(field, values);
+                        const fieldDisabled = isFieldDisabled(
+                          field,
+                          values,
+                          allFields,
+                        );
                         const index =
                           (groupOffsets[groupIndex] ?? 0) + fieldIndex;
                         return (
@@ -730,19 +743,18 @@ export function FormPreview({ definition }: { definition: FormDefinition }) {
                             key={field.id}
                             style={{ animationDelay: `${index * 50}ms` }}
                           >
-                            {field.type !== "checkbox" &&
-                              field.type !== "toggle" && (
-                                <>
-                                  <Label className="flex items-center gap-1 text-sm font-medium text-foreground">
-                                    {field.attributes.label}
-                                  </Label>
-                                  {field.attributes.description && (
-                                    <p className="text-xs text-muted-foreground">
-                                      {field.attributes.description}
-                                    </p>
-                                  )}
-                                </>
-                              )}
+                            {field.type !== "toggle" && (
+                              <>
+                                <Label className="flex items-center gap-1 text-sm font-medium text-foreground">
+                                  {field.attributes.label}
+                                </Label>
+                                {field.attributes.description && (
+                                  <p className="text-xs text-muted-foreground">
+                                    {field.attributes.description}
+                                  </p>
+                                )}
+                              </>
+                            )}
                             <FieldInput
                               disabled={fieldDisabled}
                               error={fieldError ?? null}
@@ -756,8 +768,7 @@ export function FormPreview({ definition }: { definition: FormDefinition }) {
                               touched={!!fieldTouched}
                               value={values[field.id] ?? ""}
                             />
-                            {(field.type === "checkbox" ||
-                              field.type === "toggle") &&
+                            {field.type === "toggle" &&
                               field.attributes.description && (
                                 <p className="text-xs text-muted-foreground">
                                   {field.attributes.description}

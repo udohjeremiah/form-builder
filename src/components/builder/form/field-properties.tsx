@@ -1,7 +1,7 @@
 "use client";
 
-import { PlusIcon, XIcon } from "lucide-react";
-import { Fragment } from "react";
+import { PlusIcon, Settings2Icon, XIcon } from "lucide-react";
+import { Fragment, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,12 @@ import {
   ComboboxValue,
   useComboboxAnchor,
 } from "@/components/ui/combobox";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+} from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -43,6 +49,7 @@ import type {
   FieldRule,
 } from "../index";
 
+import { OptionsValueInput } from "../options-value-input";
 import {
   AUTOCOMPLETE_OPTIONS,
   CONDITION_OPERATOR_LABELS,
@@ -51,6 +58,7 @@ import {
   isMultiValueOperator,
   isPresenceOperator,
 } from "./field-registry";
+import { getActiveOptions } from "./form-definition";
 
 type EffectKey = keyof FieldLogic;
 
@@ -64,7 +72,8 @@ const NEW_RULE: FieldRule = { fieldId: "", operator: "not_empty" };
 
 /**
  * A self-contained condition builder that drives a single ConditionGroup.
- * Used by both the field-level "Behavior" editor and per-option-group gating.
+ * The owning field can be excluded from the candidate field list via
+ * `excludeFieldId` to avoid self-referential conditions.
  */
 const ConditionEditor = ({
   allFields,
@@ -121,9 +130,13 @@ const ConditionEditor = ({
       </div>
 
       {group.rules.length === 0 && (
-        <p className="rounded-md border border-dashed border-border/70 py-3 text-center text-[11px] text-muted-foreground/60">
-          No conditions yet. Add one below.
-        </p>
+        <Empty className="border border-dashed">
+          <EmptyHeader>
+            <EmptyDescription>
+              No conditions yet. Add one below.
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       )}
 
       {group.rules.map((rule, index) => {
@@ -178,8 +191,8 @@ const ConditionEditor = ({
                   onClick={() => {
                     removeRule(index);
                   }}
-                  title="Remove condition"
                   size="icon-xs"
+                  title="Remove condition"
                   variant="destructive"
                 >
                   <XIcon className="size-3" />
@@ -210,6 +223,7 @@ const ConditionEditor = ({
               </Select>
 
               <RuleValueInput
+                field={allFields?.find((f) => f.id === rule.fieldId)}
                 index={index}
                 rule={rule}
                 updateRule={updateRule}
@@ -239,30 +253,40 @@ const ConditionEditor = ({
  * single-line input otherwise.
  */
 const RuleValueInput = ({
+  field,
   index,
   rule,
   updateRule,
 }: {
+  field?: AnyFieldDefinition;
   index: number;
   rule: FieldRule;
   updateRule: (index: number, patch: Partial<FieldRule>) => void;
 }) => {
   if (isPresenceOperator(rule.operator)) return null;
 
+  const options = field ? getActiveOptions(field) : [];
+  if (options.length > 0) {
+    return (
+      <OptionsValueInput
+        fullWidth
+        onChange={(value) => {
+          updateRule(index, { value });
+        }}
+        operator={rule.operator}
+        options={options}
+        value={rule.value ?? ""}
+      />
+    );
+  }
+
   if (isMultiValueOperator(rule.operator)) {
     return (
-      <Textarea
-        className="min-h-20 resize-none font-mono text-xs"
-        onChange={(event) => {
-          updateRule(index, {
-            value: event.target.value
-              .split("\n")
-              .filter((line) => line.trim().length > 0)
-              .join("\n"),
-          });
+      <RuleMultiValueInput
+        onChange={(value) => {
+          updateRule(index, { value });
         }}
-        placeholder="Enter each expected value on its own line..."
-        rows={3}
+        reseedKey={`${rule.fieldId}:${rule.operator}`}
         value={rule.value ?? ""}
       />
     );
@@ -276,6 +300,44 @@ const RuleValueInput = ({
       }}
       placeholder="Expected value..."
       value={rule.value ?? ""}
+    />
+  );
+};
+
+const RuleMultiValueInput = ({
+  onChange,
+  reseedKey,
+  value,
+}: {
+  onChange: (value: string) => void;
+  reseedKey: string;
+  value: string;
+}) => {
+  // Commit on blur rather than every keystroke: committing live strips the
+  // trailing blank line just created with Enter (the model drops empty lines),
+  // so a new line would vanish. The draft keeps the raw text locally and the
+  // cleaned list is committed on blur. Re-mounting per field+operator reseeds
+  // it when the referenced field or operator changes.
+  const [draft, setDraft] = useState(() => value);
+
+  return (
+    <Textarea
+      className="max-h-32 basis-full resize-none overflow-y-auto font-mono text-xs"
+      key={reseedKey}
+      onBlur={() => {
+        onChange(
+          draft
+            .split("\n")
+            .filter((line) => line.trim().length > 0)
+            .join("\n"),
+        );
+      }}
+      onChange={(event) => {
+        setDraft(event.target.value);
+      }}
+      placeholder="Enter each expected value on its own line..."
+      rows={3}
+      value={draft}
     />
   );
 };
@@ -337,6 +399,216 @@ const TextAttribute = ({
   </div>
 );
 
+const LinesAttribute = ({
+  label,
+  onValueChange,
+  placeholder,
+  value,
+}: {
+  label: string;
+  onValueChange: (value: string[]) => void;
+  placeholder?: string;
+  value: string[];
+}) => {
+  const [draft, setDraft] = useState(() => value.join("\n"));
+
+  return (
+    <div className="space-y-1">
+      <Label className="text-[11px] font-medium text-muted-foreground/70">
+        {label}
+      </Label>
+      <Textarea
+        className="h-32 resize-none overflow-y-auto font-mono text-xs"
+        onBlur={() => {
+          onValueChange(draft.split("\n").filter((line) => line.length > 0));
+        }}
+        onChange={(event) => {
+          setDraft(event.target.value);
+        }}
+        placeholder={placeholder}
+        value={draft}
+      />
+    </div>
+  );
+};
+
+type AttributeOptionGroup = readonly {
+  readonly label: string;
+  readonly options: readonly {
+    readonly label: string;
+    readonly value: string;
+  }[];
+}[];
+
+const BooleanAttribute = ({
+  label,
+  onValueChange,
+  value,
+}: {
+  label: string;
+  onValueChange: (value: boolean) => void;
+  value: boolean | undefined;
+}) => (
+  <div className="space-y-1">
+    <Label className="text-[11px] font-medium text-muted-foreground/70">
+      {label}
+    </Label>
+    <Select
+      onValueChange={(v) => {
+        if (!v) return;
+        onValueChange(v === "yes");
+      }}
+      value={value ? "yes" : "no"}
+    >
+      <SelectTrigger className="h-7 w-full text-xs">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem className="text-xs" value="yes">
+          Yes
+        </SelectItem>
+        <SelectItem className="text-xs" value="no">
+          No
+        </SelectItem>
+      </SelectContent>
+    </Select>
+  </div>
+);
+
+const AutocompleteAttribute = ({
+  label,
+  onValueChange,
+  value,
+}: {
+  label: string;
+  onValueChange: (value: string | undefined) => void;
+  value: string | undefined;
+}) => (
+  <div className="space-y-1">
+    <Label className="text-[11px] font-medium text-muted-foreground/70">
+      {label}
+    </Label>
+    <Select
+      onValueChange={(v) => {
+        onValueChange(v == null || v === "off" ? undefined : v);
+      }}
+      value={value ?? "off"}
+    >
+      <SelectTrigger className="h-7 w-full text-xs">
+        <SelectValue placeholder="Off" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem className="text-xs" value="off">
+          Off
+        </SelectItem>
+        {AUTOCOMPLETE_OPTIONS.map((group) => (
+          <SelectGroup key={group.label}>
+            <SelectLabel className="text-[10px]">{group.label}</SelectLabel>
+            {group.options.map((option) => (
+              <SelectItem
+                className="text-xs"
+                key={option.value}
+                value={option.value}
+              >
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        ))}
+      </SelectContent>
+    </Select>
+  </div>
+);
+
+const MultiSelectAttribute = ({
+  label,
+  onValueChange,
+  options,
+}: {
+  label: string;
+  onValueChange: (value: string[]) => void;
+  options: AttributeOptionGroup;
+}) => {
+  const anchor = useComboboxAnchor();
+
+  return (
+    <div className="space-y-1">
+      <Label className="text-[11px] font-medium text-muted-foreground/70">
+        {label}
+      </Label>
+      <Combobox
+        autoHighlight={true}
+        items={options}
+        multiple={true}
+        onValueChange={onValueChange}
+      >
+        <ComboboxChips className="w-full min-w-0" ref={anchor}>
+          <ComboboxValue>
+            {(values: string[]) => (
+              <Fragment>
+                {values.map((innerValue: string) => (
+                  <ComboboxChip className="max-w-full min-w-0" key={innerValue}>
+                    <span className="max-w-40 min-w-0 truncate">
+                      {innerValue}
+                    </span>
+                  </ComboboxChip>
+                ))}
+                <ComboboxChipsInput />
+              </Fragment>
+            )}
+          </ComboboxValue>
+        </ComboboxChips>
+        <ComboboxContent anchor={anchor}>
+          <ComboboxEmpty>No items found.</ComboboxEmpty>
+          <ComboboxList>
+            {(group: (typeof options)[number], index) => (
+              <ComboboxGroup items={group.options} key={group.label}>
+                <ComboboxLabel>{group.label}</ComboboxLabel>
+                <ComboboxCollection>
+                  {(item: (typeof options)[number]["options"][number]) => (
+                    <ComboboxItem key={item.value} value={item.value}>
+                      {item.label}
+                    </ComboboxItem>
+                  )}
+                </ComboboxCollection>
+                {index < options.length - 1 && <ComboboxSeparator />}
+              </ComboboxGroup>
+            )}
+          </ComboboxList>
+        </ComboboxContent>
+      </Combobox>
+    </div>
+  );
+};
+
+const DateTimeAttribute = ({
+  inputType,
+  label,
+  onValueChange,
+  value,
+}: {
+  inputType: string;
+  label: string;
+  onValueChange: (value: string | undefined) => void;
+  value: string | undefined;
+}) => (
+  <div className="space-y-1">
+    <Label className="text-[11px] font-medium text-muted-foreground/70">
+      {label}
+    </Label>
+    <Input
+      className="h-8 text-[13px]"
+      onChange={(event) => {
+        onValueChange(
+          event.target.value === "" ? undefined : event.target.value,
+        );
+      }}
+      type={inputType}
+      value={value ?? ""}
+    />
+  </div>
+);
+
 export function FieldProperties({
   allFields,
   field,
@@ -351,24 +623,22 @@ export function FieldProperties({
     updater: (field: AnyFieldDefinition) => AnyFieldDefinition,
   ) => void;
 }) {
-  const anchor = useComboboxAnchor();
-
   if (!field) {
     return (
       <div
         className={cn(
           fullWidth ? "w-full" : "w-full min-w-0 md:w-[40%]",
-          "flex items-center justify-center border-l border-border bg-background p-6",
+          "flex h-full items-stretch justify-center border-l border-border bg-background p-6",
         )}
       >
-        <div className="text-center">
-          <div className="mx-auto mb-3 flex size-10 items-center justify-center rounded-xl bg-muted">
-            <span className="text-lg text-muted-foreground/30">⚙</span>
-          </div>
-          <p className="text-xs font-medium text-muted-foreground/40">
-            Select a field to edit
-          </p>
-        </div>
+        <Empty>
+          <EmptyMedia variant="icon">
+            <Settings2Icon className="size-5" />
+          </EmptyMedia>
+          <EmptyHeader>
+            <EmptyDescription>Select a field to edit</EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       </div>
     );
   }
@@ -521,186 +791,69 @@ export function FieldProperties({
 
           if (meta.kind === "boolean") {
             return (
-              <div className="space-y-1" key={meta.key}>
-                <Label className="text-[11px] font-medium text-muted-foreground/70">
-                  {meta.label}
-                </Label>
-                <Select
-                  onValueChange={(v) => {
-                    if (!v) return;
-                    setAttributeValue(meta.key, v === "yes");
-                  }}
-                  value={value ? "yes" : "no"}
-                >
-                  <SelectTrigger className="h-7 w-full text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem className="text-xs" value="yes">
-                      Yes
-                    </SelectItem>
-                    <SelectItem className="text-xs" value="no">
-                      No
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              <BooleanAttribute
+                key={meta.key}
+                label={meta.label}
+                onValueChange={(v) => {
+                  setAttributeValue(meta.key, v);
+                }}
+                value={typeof value === "boolean" ? value : undefined}
+              />
             );
           }
 
           if (meta.kind === "autocomplete") {
             return (
-              <div className="space-y-1" key={meta.key}>
-                <Label className="text-[11px] font-medium text-muted-foreground/70">
-                  {meta.label}
-                </Label>
-                <Select
-                  onValueChange={(v) => {
-                    setAttributeValue(meta.key, v === "off" ? undefined : v);
-                  }}
-                  value={(value as string | undefined) ?? "off"}
-                >
-                  <SelectTrigger className="h-7 w-full text-xs">
-                    <SelectValue placeholder="Off" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem className="text-xs" value="off">
-                      Off
-                    </SelectItem>
-                    {AUTOCOMPLETE_OPTIONS.map((group) => (
-                      <SelectGroup key={group.label}>
-                        <SelectLabel className="text-[10px]">
-                          {group.label}
-                        </SelectLabel>
-                        {group.options.map((option) => (
-                          <SelectItem
-                            className="text-xs"
-                            key={option.value}
-                            value={option.value}
-                          >
-                            {option.label}
-                          </SelectItem>
-                        ))}
-                      </SelectGroup>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              <AutocompleteAttribute
+                key={meta.key}
+                label={meta.label}
+                onValueChange={(v) => {
+                  setAttributeValue(meta.key, v);
+                }}
+                value={typeof value === "string" ? value : undefined}
+              />
             );
           }
 
           if (meta.kind === "multi-select") {
-            const multiOptions = (meta.options ?? []) as readonly {
-              readonly label: string;
-              readonly options: readonly {
-                readonly label: string;
-                readonly value: string;
-              }[];
-            }[];
-
+            const multiOptions = (meta.options ?? []) as AttributeOptionGroup;
             return (
-              <div className="space-y-1" key={meta.key}>
-                <Label className="text-[11px] font-medium text-muted-foreground/70">
-                  {meta.label}
-                </Label>
-                <Combobox
-                  autoHighlight={true}
-                  items={multiOptions}
-                  multiple={true}
-                  onValueChange={(value) => {
-                    setAttributeValue(meta.key, value);
-                  }}
-                >
-                  <ComboboxChips className="w-full min-w-0" ref={anchor}>
-                    <ComboboxValue>
-                      {(values: string[]) => (
-                        <Fragment>
-                          {values.map((value: string) => (
-                            <ComboboxChip
-                              className="max-w-full min-w-0"
-                              key={value}
-                            >
-                              <span className="max-w-40 min-w-0 truncate">
-                                {value}
-                              </span>
-                            </ComboboxChip>
-                          ))}
-                          <ComboboxChipsInput />
-                        </Fragment>
-                      )}
-                    </ComboboxValue>
-                  </ComboboxChips>
-                  <ComboboxContent anchor={anchor}>
-                    <ComboboxEmpty>No items found.</ComboboxEmpty>
-                    <ComboboxList>
-                      {(group: (typeof multiOptions)[number], index) => (
-                        <ComboboxGroup items={group.options} key={group.label}>
-                          <ComboboxLabel>{group.label}</ComboboxLabel>
-                          <ComboboxCollection>
-                            {(
-                              item: (typeof multiOptions)[number]["options"][number],
-                            ) => (
-                              <ComboboxItem key={item.value} value={item.value}>
-                                {item.label}
-                              </ComboboxItem>
-                            )}
-                          </ComboboxCollection>
-                          {index < multiOptions.length - 1 && (
-                            <ComboboxSeparator />
-                          )}
-                        </ComboboxGroup>
-                      )}
-                    </ComboboxList>
-                  </ComboboxContent>
-                </Combobox>
-              </div>
+              <MultiSelectAttribute
+                key={meta.key}
+                label={meta.label}
+                onValueChange={(v) => {
+                  setAttributeValue(meta.key, v);
+                }}
+                options={multiOptions}
+              />
             );
           }
 
           if (meta.kind === "datetime") {
             return (
-              <div className="space-y-1" key={meta.key}>
-                <Label className="text-[11px] font-medium text-muted-foreground/70">
-                  {meta.label}
-                </Label>
-                <Input
-                  className="h-8 text-[13px]"
-                  onChange={(event) => {
-                    setAttributeValue(
-                      meta.key,
-                      event.target.value === ""
-                        ? undefined
-                        : event.target.value,
-                    );
-                  }}
-                  type={meta.inputType ?? "text"}
-                  value={(value as string | undefined) ?? ""}
-                />
-              </div>
+              <DateTimeAttribute
+                inputType={meta.inputType ?? "text"}
+                key={meta.key}
+                label={meta.label}
+                onValueChange={(v) => {
+                  setAttributeValue(meta.key, v);
+                }}
+                value={typeof value === "string" ? value : undefined}
+              />
             );
           }
 
           if (meta.kind === "lines") {
             return (
-              <div className="space-y-1" key={meta.key}>
-                <Label className="text-[11px] font-medium text-muted-foreground/70">
-                  {meta.label}
-                </Label>
-                <Textarea
-                  className="resize-none font-mono text-xs"
-                  onChange={(event) => {
-                    setAttributeValue(
-                      meta.key,
-                      event.target.value
-                        .split("\n")
-                        .filter((line) => line.length > 0),
-                    );
-                  }}
-                  placeholder={meta.placeholder}
-                  rows={3}
-                  value={(Array.isArray(value) ? value : []).join("\n")}
-                />
-              </div>
+              <LinesAttribute
+                key={`${field.id}:${String(meta.key)}`}
+                label={meta.label}
+                onValueChange={(lines) => {
+                  setAttributeValue(meta.key, lines);
+                }}
+                placeholder={meta.placeholder}
+                value={Array.isArray(value) ? (value as string[]) : []}
+              />
             );
           }
 
@@ -732,7 +885,6 @@ export function FieldProperties({
 
         <Separator className="my-3" />
 
-        {/* Conditional behavior */}
         <div>
           <h3 className="mb-4 text-[11px] font-semibold tracking-widest text-muted-foreground/60 uppercase">
             Behavior

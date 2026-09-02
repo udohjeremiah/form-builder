@@ -13,6 +13,12 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+} from "@/components/ui/empty";
 import { cn } from "@/lib/cn";
 
 import type {
@@ -122,6 +128,8 @@ const SectionCard = ({
               event.stopPropagation();
               onRemoveSection(entry.section.id);
             }}
+            role="button"
+            title="Remove section"
           >
             <XIcon className="size-3" />
           </span>
@@ -224,6 +232,7 @@ const SortableField = ({
             onDuplicate(field.id);
           }}
           size="icon-xs"
+          title="Duplicate field"
           variant="outline"
         >
           <CopyIcon className="size-3" />
@@ -234,6 +243,7 @@ const SortableField = ({
             onRemove(field.id);
           }}
           size="icon-xs"
+          title="Remove field"
           variant="outline"
         >
           <Trash2Icon className="size-3" />
@@ -305,6 +315,8 @@ const SortableStepTab = ({
             event.stopPropagation();
             onRemoveStep(index);
           }}
+          role="button"
+          title="Remove step"
         >
           <XIcon className="size-3" />
         </span>
@@ -349,6 +361,32 @@ export function FormCanvas({
   // Multi-step is derived from the model; a lone step renders as one quiet
   // tab chip that still selects the step for attribute editing.
   const multiStepEnabled = steps.length > 1;
+  const isEmpty = steps.length === 0;
+
+  // Whole-canvas drop target shown while the form has no steps yet, so the
+  // very first palette drag has a visible place to land. Anything else that
+  // starts the form flows through the appends in the drag handler.
+  const { isDropTarget, ref } = useDroppable({
+    accept: ["palette"],
+    id: "empty-canvas",
+  });
+
+  const emptyCanvas = (
+    <Empty
+      className={cn(
+        "border border-dashed",
+        isDropTarget && "border-primary/40 bg-primary/4",
+      )}
+      ref={ref}
+    >
+      <EmptyHeader>
+        <EmptyTitle>Drag a field here to get started</EmptyTitle>
+        <EmptyDescription>
+          A step and section are created automatically
+        </EmptyDescription>
+      </EmptyHeader>
+    </Empty>
+  );
 
   const totalFields = sections.reduce(
     (sum, entry) => sum + entry.section.fields.length,
@@ -409,14 +447,13 @@ export function FormCanvas({
   );
 
   const summaryParts = [
-    `step ${activeStepIndex + 1}/${steps.length}`,
+    isEmpty ? "0 steps" : `step ${activeStepIndex + 1}/${steps.length}`,
     plural(sections.length, "section"),
     plural(totalFields, "field"),
   ];
 
   return (
     <div className="flex size-full min-w-0 flex-col md:w-[60%]">
-      {/* Canvas header */}
       <div className="flex items-center justify-between border-b border-border bg-background px-5 py-2.5">
         <span className="text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
           Canvas
@@ -426,27 +463,39 @@ export function FormCanvas({
         </span>
       </div>
 
-      {/* Step tabs; a single step stays selectable through its quiet chip */}
-      <div className="flex items-center gap-1 overflow-x-auto border-b border-border bg-background px-3 py-1.5">
-        {steps.map((step, index) => (
-          <SortableStepTab
-            index={index}
-            isActive={activeStepIndex === index}
-            key={step.id}
-            multiStepEnabled={multiStepEnabled}
-            onRemoveStep={onRemoveStep}
-            onSelectStep={onSelectStep}
-            onStepChange={onStepChange}
-            step={step}
-          />
-        ))}
-        <Button onClick={onAddStep} size="icon" variant="ghost">
-          <PlusIcon className="size-3.5" />
-        </Button>
-      </div>
+      {!isEmpty && (
+        <div className="flex items-center gap-1 overflow-x-auto border-b border-border bg-background px-3 py-1.5">
+          {steps.map((step, index) => (
+            <SortableStepTab
+              index={index}
+              isActive={activeStepIndex === index}
+              key={step.id}
+              multiStepEnabled={multiStepEnabled}
+              onRemoveStep={onRemoveStep}
+              onSelectStep={onSelectStep}
+              onStepChange={onStepChange}
+              step={step}
+            />
+          ))}
+          <Button
+            onClick={onAddStep}
+            size="icon"
+            title="Add step"
+            variant="ghost"
+          >
+            <PlusIcon className="size-3.5" />
+          </Button>
+        </div>
+      )}
 
-      {/* Drop zone */}
-      <div className="flex-1 overflow-y-auto px-3 py-5">{sectionCards}</div>
+      <div
+        className={cn(
+          "flex-1 overflow-y-auto px-3 py-5",
+          isEmpty && "flex flex-col",
+        )}
+      >
+        {isEmpty ? emptyCanvas : sectionCards}
+      </div>
     </div>
   );
 }

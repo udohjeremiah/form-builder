@@ -4,6 +4,12 @@ import { PlusIcon } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+} from "@/components/ui/empty";
 import { cn } from "@/lib/cn";
 
 import type { Rule, RuleStatus } from "../index";
@@ -28,7 +34,7 @@ export function RuleList({
   rules: Rule[];
 }) {
   return (
-    <div className="mx-auto w-full max-w-5xl p-4 md:p-6">
+    <div className="mx-auto flex size-full w-full max-w-5xl min-w-0 flex-col p-4 md:p-6">
       <div className="mb-4 flex items-center justify-between">
         <div className="flex items-baseline gap-2">
           <h2 className="font-mono text-xs tracking-wider text-muted-foreground uppercase">
@@ -47,14 +53,14 @@ export function RuleList({
       </div>
 
       {rules.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border/70 py-16 text-center">
-          <p className="font-mono text-sm text-muted-foreground">
-            No rules yet.
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground/60">
-            Create your first rule to start setting up assessment logic.
-          </p>
-        </div>
+        <Empty className="border border-dashed">
+          <EmptyHeader>
+            <EmptyTitle>No rules yet</EmptyTitle>
+            <EmptyDescription>
+              Create your first rule to start setting up assessment logic.
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-border/70">
           <table className="w-full min-w-max border-collapse text-start">

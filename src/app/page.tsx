@@ -3,50 +3,46 @@
 import { useEffect, useState } from "react";
 
 import { Builder, type FormDefinition } from "@/components/builder";
-import { createDefaultDefinition } from "@/components/builder/form/form-definition";
 import { FormPreview } from "@/components/form-preview";
 
 const STORAGE_KEY = "form-definition";
 
-const loadSaved = (): FormDefinition | undefined => {
+const EMPTY_DEFINITION: FormDefinition = { rules: [], steps: [] };
+
+const loadSaved = (): FormDefinition => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return undefined;
-    return JSON.parse(raw) as FormDefinition;
+    return raw ? (JSON.parse(raw) as FormDefinition) : EMPTY_DEFINITION;
   } catch {
-    return undefined;
+    return EMPTY_DEFINITION;
   }
 };
 
 export default function BuilderPage() {
-  const [definition, setDefinition] = useState<FormDefinition>(() =>
-    createDefaultDefinition(),
-  );
-  const [hydrated, setHydrated] = useState(false);
+  // `initialValue` is a one-time seed, so localStorage is read exactly once on
+  // mount; the builder owns all state after that and reports it via onChange.
+  const [seed, setSeed] = useState<FormDefinition | null>(null);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time draft load from localStorage
-    setDefinition(loadSaved() ?? createDefaultDefinition());
-    setHydrated(true);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSeed(loadSaved());
   }, []);
 
-  if (!hydrated) return null;
+  if (seed === null) return null;
 
   return (
     <Builder
+      initialValue={seed}
       onChange={(next) => {
-        setDefinition(next);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
       }}
-      onClear={(fresh) => {
+      onClear={() => {
         localStorage.removeItem(STORAGE_KEY);
-        setDefinition(fresh);
       }}
       onComplete={(definition) => {
         console.log(definition);
       }}
       preview={(definition) => <FormPreview definition={definition} />}
-      value={definition}
     >
       <Builder.Form>
         <Builder.Form.Palette />

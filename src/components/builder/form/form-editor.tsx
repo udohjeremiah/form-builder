@@ -139,7 +139,6 @@ export function Form({ children }: FormProps) {
   return (
     <FormContext.Provider value={formContext}>
       {isMobile ? (
-        /* ─── Mobile layout: single panel at a time ─── */
         <div className="flex h-full flex-1 flex-col overflow-hidden">
           <div className="flex-1 overflow-hidden">
             <div
@@ -170,7 +169,6 @@ export function Form({ children }: FormProps) {
             </div>
           </div>
 
-          {/* Bottom tab bar */}
           <nav className="flex shrink-0 items-center border-t border-border bg-background">
             {mobileTabs.map(({ icon: Icon, key, label }) => (
               <button
@@ -195,7 +193,6 @@ export function Form({ children }: FormProps) {
           </nav>
         </div>
       ) : (
-        /* ─── Desktop layout: side-by-side panels ─── */
         <div className="flex h-full flex-1 overflow-hidden">
           <DragDropProvider
             onDragEnd={editor.handleDragEnd}

@@ -35,11 +35,7 @@ import {
 } from "./builder-context";
 import { FieldPalette } from "./form/field-palette";
 import { FormCanvas } from "./form/form-canvas";
-import {
-  createDefaultDefinition,
-  getAllFields,
-  isDefinitionComplete,
-} from "./form/form-definition";
+import { getAllFields, isDefinitionComplete } from "./form/form-definition";
 import { Form } from "./form/form-editor";
 import { PreviewPanel, type PreviewRenderer } from "./preview-panel";
 import { RuleEditor } from "./rules/rule-editor";
@@ -62,25 +58,30 @@ export interface BuilderProps {
   children?: ReactNode;
   /** Optional className applied to the outer shell. */
   className?: string;
+  /**
+   * Seed used to initialize the builder's working state on first mount. The
+   * builder is uncontrolled after that: its internal state is the source of
+   * truth, edits are reported through `onChange`, and the consumer persists
+   * wherever it likes. `initialValue` is only re-applied by remounting.
+   */
+  initialValue?: FormDefinition;
   /** Notified whenever the definition changes. */
   onChange?: (definition: FormDefinition) => void;
-  /** Called when "Clear" resets the builder, with the fresh (reset) definition. */
+  /** Called when the builder is reset, with the fresh (reset) definition. */
   onClear?: (definition: FormDefinition) => void;
   /**
-   * Called with the completed definition whenever the `completed` flag
-   * transitions (into or out of a complete state) and when "Publish" is
-   * clicked while the definition is complete. A definition is complete when
-   * it has at least one field and every rule's condition is populated.
+   * Called with the completed definition and its completion flag either when
+   * the `completed` state transitions or when the consumer triggers a
+   * "complete" action on an already-complete definition. A definition is
+   * complete when it has at least one field and every rule's condition is
+   * populated.
    */
   onComplete?: (definition: FormDefinition, completed: boolean) => void;
   /**
-   * Renders the UI preview shown in the "UI" tab. When omitted, the "UI" tab
-   * is hidden and only the Form Schema and Rules Schema tabs are shown. Pass
-   * your own renderer to customize the preview.
+   * Renders the live preview of the definition. When omitted, no preview is
+   * shown. Pass your own renderer to customize how the definition is previewed.
    */
   preview?: PreviewRenderer;
-  /** The current definition; the builder is controlled by this value. */
-  value: FormDefinition;
 }
 
 export interface ComparisonCondition {
@@ -146,7 +147,7 @@ export interface ExistsCondition {
 }
 
 export interface FieldAttributesByType {
-  checkbox: BaseFieldAttributes;
+  checkbox: OptionsFieldAttributes;
   color: BaseFieldAttributes;
   date: DateTimeFieldAttributes;
   datetime: DateTimeFieldAttributes;
@@ -241,6 +242,7 @@ export interface NumberFieldAttributes extends BaseFieldAttributes {
 }
 
 export interface OptionsFieldAttributes extends BaseFieldAttributes {
+  /** One option per line. */
   options?: string[];
 }
 
@@ -350,26 +352,28 @@ const VIEW_LABELS: Record<BuilderView, { icon: LucideIcon; label: string }> = {
   form: { icon: ClipboardListIcon, label: "Form Builder" },
   rules: { icon: ListChecksIcon, label: "Rules Builder" },
 };
+
+const EMPTY_DEFINITION: FormDefinition = { rules: [], steps: [] };
 export function Builder({
   children,
   className,
+  initialValue,
   onChange,
   onClear,
   onComplete,
   preview,
-  value,
 }: BuilderProps) {
   const isMobile = useIsMobile();
 
-  const [formState, setFormState] = useState<FormDefinition>(value);
+  // The builder owns its working state; `initialValue` only seeds the first
+  // mount. After that it's uncontrolled — edits flow out via `onChange` and
+  // the consumer persists independently.
+  const [formState, setFormState] = useState<FormDefinition>(
+    initialValue ?? EMPTY_DEFINITION,
+  );
 
   const [view, setView] = useState<BuilderView>("form");
   const [resetKey, setResetKey] = useState(0);
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- mirror the controlled `value` prop into internal formState
-    setFormState(value);
-  }, [value]);
 
   useEffect(() => {
     onChange?.(formState);
@@ -386,7 +390,7 @@ export function Builder({
   const allFields = getAllFields(formState);
 
   const handleClear = useCallback(() => {
-    const next = createDefaultDefinition();
+    const next = EMPTY_DEFINITION;
     setFormState(next);
     onClear?.(next);
     setResetKey((previous) => previous + 1);
@@ -404,10 +408,8 @@ export function Builder({
   return (
     <BuilderContext.Provider value={builderContext}>
       <div className={className ?? "flex h-screen flex-col bg-background"}>
-        {/* Header */}
         <header className="flex h-12 shrink-0 items-center justify-between border-b border-border bg-background px-2 md:px-3">
           <div className="flex items-center gap-1.5 md:gap-2">
-            {/* View switcher */}
             <DropdownMenu>
               <DropdownMenuTrigger
                 render={
@@ -455,7 +457,6 @@ export function Builder({
               Publish
             </Button>
 
-            {/* Desktop-only: Preview sheet */}
             {!isMobile && (
               <Sheet>
                 <SheetTrigger
@@ -477,7 +478,6 @@ export function Builder({
           </div>
         </header>
 
-        {/* Main content */}
         <main className="flex min-h-0 flex-1">
           {view === "rules" ? (
             <Builder.Rules>{children}</Builder.Rules>

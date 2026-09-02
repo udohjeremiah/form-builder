@@ -48,19 +48,6 @@ const createStepDefinition = (): StepDefinition => {
   };
 };
 
-export const createDefaultDefinition = (): FormDefinition => ({
-  // Deterministic ids keep the prerendered scaffold identical on the server
-  // and client; anything added through the builder gets random ids instead.
-  rules: [],
-  steps: [
-    {
-      attributes: {},
-      id: "st_seed",
-      sections: [{ attributes: {}, fields: [], id: "sec_seed" }],
-    },
-  ],
-});
-
 export const newField = (type: FieldType): AnyFieldDefinition => {
   const entry = getFieldEntry(type);
   return {
@@ -151,23 +138,33 @@ export const appendField = (
   definition: FormDefinition,
   stepIndex: number,
   field: AnyFieldDefinition,
-): FormDefinition => ({
-  ...definition,
-  steps: definition.steps.map((step, index) => {
-    if (index !== stepIndex) return step;
-    if (step.sections.length === 0) {
-      return { ...step, sections: [createSection([field])] };
-    }
-    return {
-      ...step,
-      sections: step.sections.map((section, sectionIndex) =>
-        sectionIndex === step.sections.length - 1
-          ? { ...section, fields: [...section.fields, field] }
-          : section,
-      ),
-    };
-  }),
-});
+): FormDefinition => {
+  // A blank form has no steps; the first added field creates Step 1 with a
+  // single section so the drop/tap always lands somewhere.
+  if (definition.steps.length === 0) {
+    const step = createStepDefinition();
+    step.sections = [createSection([field])];
+    return { ...definition, steps: [step] };
+  }
+
+  return {
+    ...definition,
+    steps: definition.steps.map((step, index) => {
+      if (index !== stepIndex) return step;
+      if (step.sections.length === 0) {
+        return { ...step, sections: [createSection([field])] };
+      }
+      return {
+        ...step,
+        sections: step.sections.map((section, sectionIndex) =>
+          sectionIndex === step.sections.length - 1
+            ? { ...section, fields: [...section.fields, field] }
+            : section,
+        ),
+      };
+    }),
+  };
+};
 
 /**
  * Moves a field so that it takes the global position previously occupied by
@@ -179,10 +176,13 @@ export const moveField = (
   toId: string,
 ): FormDefinition => {
   if (fromId === toId) return definition;
+
   const flat = getAllFields(definition);
   const fromIndex = flat.findIndex((field) => field.id === fromId);
   const toIndex = flat.findIndex((field) => field.id === toId);
+
   if (fromIndex === -1 || toIndex === -1) return definition;
+
   // Mirror dnd-kit's optimistic arrayMove exactly: remove the dragged field,
   // then insert it at the target's original index in the shrunk list. Moving
   // down lands after the target, moving up lands before it — matching what
@@ -215,6 +215,7 @@ export const moveFieldWithinSection = (
   toIndex: number,
 ): FormDefinition => {
   if (fromIndex === toIndex) return definition;
+
   return {
     ...definition,
     steps: definition.steps.map((step) => ({
@@ -258,8 +259,10 @@ export const moveFieldIntoSection = (
   sectionId: string,
 ): FormDefinition => {
   const flat = getAllFields(definition);
+
   const moved = flat.find((field) => field.id === fieldId);
   if (!moved) return definition;
+
   return {
     ...definition,
     steps: definition.steps.map((step) => ({
@@ -421,36 +424,55 @@ const compareValues = (left: string, right: string): number => {
  * Resolves the options that should be shown for an options-bearing field.
  */
 export function getActiveOptions(field: AnyFieldDefinition): string[] {
-  if (field.type !== "radio" && field.type !== "select") return [];
+  if (
+    field.type !== "checkbox" &&
+    field.type !== "radio" &&
+    field.type !== "select"
+  )
+    return [];
   return field.attributes.options ?? [];
 }
 
 export function isFieldDisabled(
   field: AnyFieldDefinition,
   values: Record<string, string>,
+  allFields: AnyFieldDefinition[],
 ): boolean {
   const { disable } = field.logic;
-  return disable ? evaluateGroup(disable, values) : false;
+  return disable ? evaluateGroup(disable, values, allFields) : false;
 }
 
 export function isFieldVisible(
   field: AnyFieldDefinition,
   values: Record<string, string>,
+  allFields: AnyFieldDefinition[],
 ): boolean {
   const { hide, show } = field.logic;
-  if (show && !evaluateGroup(show, values)) return false;
-  if (hide && evaluateGroup(hide, values)) return false;
+  if (show && !evaluateGroup(show, values, allFields)) return false;
+  if (hide && evaluateGroup(hide, values, allFields)) return false;
   return true;
+}
+
+/**
+ * Splits a checkbox field's comma-joined selection into the set of checked
+ * options, ignoring empty entries.
+ */
+function checkedOptions(value: string): string[] {
+  return value
+    .split(",")
+    .map((option) => option.trim())
+    .filter((option) => option.length > 0);
 }
 
 function evaluateGroup(
   group: ConditionGroup,
   values: Record<string, string>,
+  allFields: AnyFieldDefinition[],
 ): boolean {
   if (group.rules.length === 0) return true;
   // A row without a target field cannot constrain anything.
   const passes = (rule: FieldRule) =>
-    !rule.fieldId || evaluateRule(rule, values);
+    !rule.fieldId || evaluateRule(rule, values, allFields);
   return group.combinator === "or"
     ? group.rules.some((rule) => passes(rule))
     : group.rules.every((rule) => passes(rule));
@@ -459,9 +481,12 @@ function evaluateGroup(
 function evaluateRule(
   rule: FieldRule,
   values: Record<string, string>,
+  allFields: AnyFieldDefinition[],
 ): boolean {
   const value = values[rule.fieldId] ?? "";
   const expected = rule.value ?? "";
+  const isCheckbox =
+    allFields.find((field) => field.id === rule.fieldId)?.type === "checkbox";
   switch (rule.operator) {
     case "contains": {
       return value.includes(expected);
@@ -470,6 +495,8 @@ function evaluateRule(
       return value.trim().length === 0;
     }
     case "eq": {
+      if (isCheckbox)
+        return setsEqual(checkedOptions(value), checkedOptions(expected));
       return value === expected;
     }
     case "gt": {
@@ -479,7 +506,9 @@ function evaluateRule(
       return compareValues(value, expected) >= 0;
     }
     case "in": {
-      return listIncludes(expected, value);
+      return isCheckbox
+        ? intersects(checkedOptions(value), listValues(expected))
+        : listIncludes(expected, value);
     }
     case "lt": {
       return compareValues(value, expected) < 0;
@@ -488,6 +517,8 @@ function evaluateRule(
       return compareValues(value, expected) <= 0;
     }
     case "neq": {
+      if (isCheckbox)
+        return !setsEqual(checkedOptions(value), checkedOptions(expected));
       return value !== expected;
     }
     case "not_contains": {
@@ -497,9 +528,18 @@ function evaluateRule(
       return value.trim().length > 0;
     }
     case "not_in": {
-      return !listIncludes(expected, value);
+      return isCheckbox
+        ? !intersects(checkedOptions(value), listValues(expected))
+        : !listIncludes(expected, value);
     }
   }
+}
+
+/**
+ * Whether two sets share at least one member.
+ */
+function intersects(left: string[], right: string[]): boolean {
+  return left.some((item) => right.includes(item));
 }
 
 /**
@@ -512,6 +552,25 @@ function listIncludes(list: string, candidate: string): boolean {
     .map((item) => item.trim())
     .filter((item) => item.length > 0)
     .includes(candidate.trim());
+}
+
+/**
+ * Splits a condition's newline-joined expected values into a set, ignoring
+ * empty lines (used by checkbox `in` / `not_in` membership checks).
+ */
+function listValues(list: string): string[] {
+  return list
+    .split("\n")
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+}
+
+/**
+ * Whether two sets hold exactly the same members, regardless of order.
+ */
+function setsEqual(left: string[], right: string[]): boolean {
+  if (left.length !== right.length) return false;
+  return left.every((item) => right.includes(item));
 }
 
 const EMAIL_FORMAT = /^[^\s@]+@[^\s@][^\s.@]*\.[^\s@]+$/;
