@@ -155,11 +155,11 @@ export interface FieldAttributesByType {
   file: FileFieldAttributes;
   number: NumberFieldAttributes;
   password: PasswordFieldAttributes;
-  phone: PhoneFieldAttributes;
   radio: OptionsFieldAttributes;
   rating: RatingFieldAttributes;
   select: SelectFieldAttributes;
   slider: SliderFieldAttributes;
+  tel: TelFieldAttributes;
   text: TextFieldAttributes;
   textarea: TextareaFieldAttributes;
   time: DateTimeFieldAttributes;
@@ -204,11 +204,11 @@ export type FieldType =
   | "file"
   | "number"
   | "password"
-  | "phone"
   | "radio"
   | "rating"
   | "select"
   | "slider"
+  | "tel"
   | "text"
   | "textarea"
   | "time"
@@ -247,13 +247,6 @@ export interface OptionsFieldAttributes extends BaseFieldAttributes {
 }
 
 export interface PasswordFieldAttributes extends BaseFieldAttributes {
-  autoComplete?: string;
-  maxLength?: number;
-  minLength?: number;
-  pattern?: string;
-}
-
-export interface PhoneFieldAttributes extends BaseFieldAttributes {
   autoComplete?: string;
   maxLength?: number;
   minLength?: number;
@@ -326,6 +319,13 @@ export interface StepDefinition {
   attributes: StepAttributes;
   id: string;
   sections: SectionDefinition[];
+}
+
+export interface TelFieldAttributes extends BaseFieldAttributes {
+  autoComplete?: string;
+  maxLength?: number;
+  minLength?: number;
+  pattern?: string;
 }
 
 export interface TextareaFieldAttributes extends BaseFieldAttributes {
@@ -467,7 +467,7 @@ export function Builder({
                     </Button>
                   }
                 />
-                <SheetContent side="right">
+                <SheetContent className="min-w-full" side="right">
                   <PreviewPanel
                     definition={formState}
                     renderPreview={preview}

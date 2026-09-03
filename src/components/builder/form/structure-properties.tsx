@@ -84,7 +84,6 @@ export function StructureProperties({
               });
             }}
             placeholder="Additional context for the user"
-            rows={3}
             value={node.attributes.description ?? ""}
           />
         </div>

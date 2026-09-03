@@ -351,7 +351,6 @@ function MultiValueTextarea({
         setDraft(event.target.value);
       }}
       placeholder="Enter each expected value on its own line..."
-      rows={3}
       value={draft}
     />
   );

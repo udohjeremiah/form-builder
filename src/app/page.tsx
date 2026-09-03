@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { Builder, type FormDefinition } from "@/components/builder";
-import { FormPreview } from "@/components/form-preview";
+import { FormPreview } from "@/components/preview";
 
 const STORAGE_KEY = "form-definition";
 

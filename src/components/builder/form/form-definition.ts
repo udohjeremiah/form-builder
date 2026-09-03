@@ -31,20 +31,28 @@ const newFieldId = () => randomId("fld");
 const newSectionId = () => randomId("sec");
 const newStepId = () => randomId("st");
 
+const STEP_DESCRIPTION = "Add a description for this step";
+const SECTION_DESCRIPTION = "Add a description for this section";
+
 const createSection = (
+  title: string,
+  description: string,
   fields: AnyFieldDefinition[] = [],
 ): SectionDefinition => ({
-  attributes: {},
+  attributes: { description, title },
   fields,
   id: newSectionId(),
 });
 
-const createStepDefinition = (): StepDefinition => {
+const createStepDefinition = (
+  title: string,
+  description: string,
+): StepDefinition => {
   const id = newStepId();
   return {
-    attributes: {},
+    attributes: { description, title },
     id,
-    sections: [createSection()],
+    sections: [createSection("Section 1", SECTION_DESCRIPTION)],
   };
 };
 
@@ -142,8 +150,8 @@ export const appendField = (
   // A blank form has no steps; the first added field creates Step 1 with a
   // single section so the drop/tap always lands somewhere.
   if (definition.steps.length === 0) {
-    const step = createStepDefinition();
-    step.sections = [createSection([field])];
+    const step = createStepDefinition("Step 1", STEP_DESCRIPTION);
+    step.sections = [createSection("Section 1", SECTION_DESCRIPTION, [field])];
     return { ...definition, steps: [step] };
   }
 
@@ -152,7 +160,10 @@ export const appendField = (
     steps: definition.steps.map((step, index) => {
       if (index !== stepIndex) return step;
       if (step.sections.length === 0) {
-        return { ...step, sections: [createSection([field])] };
+        return {
+          ...step,
+          sections: [createSection("Section 1", SECTION_DESCRIPTION, [field])],
+        };
       }
       return {
         ...step,
@@ -287,7 +298,13 @@ export const moveFieldIntoSection = (
 
 export const addStep = (definition: FormDefinition): FormDefinition => ({
   ...definition,
-  steps: [...definition.steps, createStepDefinition()],
+  steps: [
+    ...definition.steps,
+    createStepDefinition(
+      `Step ${definition.steps.length + 1}`,
+      STEP_DESCRIPTION,
+    ),
+  ],
 });
 
 export const addSection = (
@@ -297,7 +314,16 @@ export const addSection = (
   ...definition,
   steps: definition.steps.map((step, index) =>
     index === stepIndex
-      ? { ...step, sections: [...step.sections, createSection()] }
+      ? {
+          ...step,
+          sections: [
+            ...step.sections,
+            createSection(
+              `Section ${step.sections.length + 1}`,
+              SECTION_DESCRIPTION,
+            ),
+          ],
+        }
       : step,
   ),
 });
@@ -587,7 +613,7 @@ export function validateFieldValue(
   switch (field.type) {
     case "email":
     case "password":
-    case "phone":
+    case "tel":
     case "text":
     case "textarea":
     case "url": {

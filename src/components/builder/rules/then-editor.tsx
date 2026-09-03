@@ -85,7 +85,6 @@ export function ThenEditor({
             onChange({ ...outcome, adminReason: event.target.value });
           }}
           placeholder="Why this outcome applies..."
-          rows={3}
           value={outcome.adminReason}
         />
       </div>

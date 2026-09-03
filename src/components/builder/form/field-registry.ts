@@ -274,27 +274,6 @@ const FIELD_REGISTRY: {
     label: "Password",
     type: "password",
   },
-  phone: {
-    attributes: [
-      {
-        key: "autoComplete",
-        kind: "autocomplete",
-        label: "Autocomplete",
-      },
-      { key: "maxLength", kind: "number", label: "Maximum length" },
-      { key: "minLength", kind: "number", label: "Minimum length" },
-      {
-        key: "pattern",
-        kind: "text",
-        label: "Pattern",
-        placeholder: "^[A-Za-z]+$",
-      },
-    ],
-    defaults: () => ({}),
-    icon: "PhoneIcon",
-    label: "Phone",
-    type: "phone",
-  },
   radio: {
     attributes: [
       {
@@ -348,6 +327,27 @@ const FIELD_REGISTRY: {
     icon: "SlidersHorizontalIcon",
     label: "Slider",
     type: "slider",
+  },
+  tel: {
+    attributes: [
+      {
+        key: "autoComplete",
+        kind: "autocomplete",
+        label: "Autocomplete",
+      },
+      { key: "maxLength", kind: "number", label: "Maximum length" },
+      { key: "minLength", kind: "number", label: "Minimum length" },
+      {
+        key: "pattern",
+        kind: "text",
+        label: "Pattern",
+        placeholder: "^[A-Za-z]+$",
+      },
+    ],
+    defaults: () => ({}),
+    icon: "PhoneIcon",
+    label: "Phone",
+    type: "tel",
   },
   text: {
     attributes: [
