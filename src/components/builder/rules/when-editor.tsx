@@ -1,10 +1,13 @@
+/* eslint-disable @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return */
 "use client";
 
+import { useField, useSelector } from "@tanstack/react-form";
 import { FolderPlusIcon, PlusIcon, XIcon } from "lucide-react";
 import { useMemo } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyDescription, EmptyHeader } from "@/components/ui/empty";
+import { FieldError } from "@/components/ui/field";
 import { generateColor } from "@/lib/generate-color";
 
 import type { AnyFieldDefinition, Condition, GroupCondition } from "../index";
@@ -15,51 +18,39 @@ import {
   newComparisonCondition,
   newGroupCondition,
   removeCondition,
+  type RuleFormHandle,
   updateCondition,
 } from "./rule-definition";
 
-interface CondCallbacks {
-  allFields: AnyFieldDefinition[];
-  onChangeCondition: (index: number, next: Condition) => void;
-  onRemoveCondition: (index: number) => void;
-  onRemoveGroup: (index: number) => void;
-}
+const groupAppend = (
+  condition: GroupCondition,
+  child: Condition,
+): GroupCondition => ({
+  ...condition,
+  conditions: [...condition.conditions, child],
+});
 
-/**
- * The WHEN tree root group. `removeable` is false for the root so it cannot
- * be deleted; nested groups are rendered by the recursive node below.
- */
 export function WhenEditor({
   allFields,
-  condition,
-  onRemoveGroup,
-  onRootChange,
-  path,
-  removeable,
+  form,
 }: {
   allFields: AnyFieldDefinition[];
-  condition: GroupCondition;
-  onRemoveGroup: () => void;
-  onRootChange: (root: Condition) => void;
-  path: readonly number[];
-  removeable: boolean;
+  form: RuleFormHandle;
 }) {
-  const updateGroup = (patch: Partial<GroupCondition>) => {
-    onRootChange(
-      updateCondition(condition, path, (node) =>
-        node.type === "group" ? { ...node, ...patch } : node,
-      ),
-    );
+  const root = useSelector(form.store, (state) => state.values.condition);
+
+  const onRootChange = (next: Condition) => {
+    form.setFieldValue("condition", next);
   };
+
+  const combinator = useField({ form, name: "condition.operator" });
+  const conditions = useField({ form, name: "condition.conditions" });
 
   const addCondition = () => {
     onRootChange(
-      updateCondition(condition, path, (node) =>
+      updateCondition(root, [], (node) =>
         node.type === "group"
-          ? {
-              ...node,
-              conditions: [...node.conditions, newComparisonCondition()],
-            }
+          ? groupAppend(node, newComparisonCondition())
           : node,
       ),
     );
@@ -67,10 +58,8 @@ export function WhenEditor({
 
   const addGroup = () => {
     onRootChange(
-      updateCondition(condition, path, (node) =>
-        node.type === "group"
-          ? { ...node, conditions: [...node.conditions, newGroupCondition()] }
-          : node,
+      updateCondition(root, [], (node) =>
+        node.type === "group" ? groupAppend(node, newGroupCondition()) : node,
       ),
     );
   };
@@ -82,46 +71,27 @@ export function WhenEditor({
       className="border-s-4 bg-background/40 p-2"
       style={{ borderInlineStartColor: color }}
     >
-      <div className="flex items-center justify-between gap-2 pb-3">
+      <div className="space-y-1 pb-3">
         <Combinator
-          onChange={(operator) => {
-            updateGroup({ operator });
+          onBlur={() => {
+            conditions.handleBlur();
+            combinator.handleBlur();
           }}
-          operator={condition.operator}
+          onChange={combinator.handleChange}
+          operator={combinator.state.value as GroupCondition["operator"]}
         />
-        {removeable && (
-          <Button
-            className="shrink-0 text-muted-foreground/50 hover:bg-destructive/10 hover:text-destructive"
-            onClick={onRemoveGroup}
-            size="icon-xs"
-            title="Remove group"
-            variant="ghost"
-          >
-            <PlusIcon className="size-3 rotate-45" />
-          </Button>
+        {conditions.state.meta.isTouched && !conditions.state.meta.isValid && (
+          <FieldError errors={conditions.state.meta.errors} />
         )}
       </div>
-
       <GroupChildren
-        callbacks={{
-          allFields,
-          onChangeCondition: (index, next) => {
-            onRootChange(
-              updateCondition(condition, [...path, index], () => next),
-            );
-          },
-          onRemoveCondition: (index) => {
-            onRootChange(removeCondition(condition, [...path, index]));
-          },
-          onRemoveGroup: (index) => {
-            onRootChange(removeCondition(condition, [...path, index]));
-          },
-        }}
-        condition={condition}
+        allFields={allFields}
+        condition={root}
+        form={form}
+        nodeName="condition"
         onRootChange={onRootChange}
-        path={path}
+        path={[]}
       />
-
       <div className="flex gap-1.5 pt-2">
         <Button
           className="flex-1 text-xs"
@@ -144,18 +114,18 @@ export function WhenEditor({
   );
 }
 
-/**
- * Renders a group's children. Each child carries its own accent border, so no
- * connectors are needed — grouping is expressed purely through the border.
- */
 function GroupChildren({
-  callbacks,
+  allFields,
   condition,
+  form,
+  nodeName,
   onRootChange,
   path,
 }: {
-  callbacks: CondCallbacks;
+  allFields: AnyFieldDefinition[];
   condition: GroupCondition;
+  form: RuleFormHandle;
+  nodeName: string;
   onRootChange: (root: Condition) => void;
   path: readonly number[];
 }) {
@@ -173,56 +143,68 @@ function GroupChildren({
 
   return (
     <div>
-      {conditions.map((child, index) => (
-        <div className="py-1.5" key={index}>
-          {child.type === "group" ? (
-            <NestedGroup
-              allFields={callbacks.allFields}
-              child={child}
-              onRemoveSelf={() => {
-                callbacks.onRemoveGroup(index);
-              }}
-              onRootChange={(next) => {
-                onRootChange(updateCondition(condition, [index], () => next));
-              }}
-              path={[...path, index]}
-            />
-          ) : (
-            <ConditionRow
-              allFields={callbacks.allFields}
-              condition={child}
-              onChange={(next) => {
-                callbacks.onChangeCondition(index, next);
-              }}
-              onRemove={() => {
-                callbacks.onRemoveCondition(index);
-              }}
-            />
-          )}
-        </div>
-      ))}
+      {conditions.map((child, index) => {
+        const childName = `${nodeName}.conditions.${index}`;
+        return (
+          <div className="py-1.5" key={index}>
+            {child.type === "group" ? (
+              <NestedGroup
+                allFields={allFields}
+                child={child}
+                form={form}
+                nodeName={childName}
+                onRemoveSelf={() => {
+                  onRootChange(removeCondition(condition, [...path, index]));
+                }}
+                onRootChange={(next) => {
+                  onRootChange(updateCondition(condition, [index], () => next));
+                }}
+                path={[...path, index]}
+              />
+            ) : (
+              <ConditionRow
+                allFields={allFields}
+                condition={child}
+                form={form}
+                nodeName={childName}
+                onChange={(next) => {
+                  onRootChange(
+                    updateCondition(condition, [...path, index], () => next),
+                  );
+                }}
+                onRemove={() => {
+                  onRootChange(removeCondition(condition, [...path, index]));
+                }}
+              />
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
 
-/**
- * A nested (non-root) group. Renders its own combinator and recurses for its
- * children; it is delineated by its own accent border rather than a rail.
- */
 function NestedGroup({
   allFields,
   child,
+  form,
+  nodeName,
   onRemoveSelf,
   onRootChange,
   path,
 }: {
   allFields: AnyFieldDefinition[];
   child: GroupCondition;
+  form: RuleFormHandle;
+  nodeName: string;
   onRemoveSelf: () => void;
   onRootChange: (root: Condition) => void;
   path: readonly number[];
 }) {
   const color = useMemo(() => generateColor(), []);
+
+  const combinator = useField({ form, name: `${nodeName}.operator` });
+  const conditions = useField({ form, name: `${nodeName}.conditions` });
 
   const rootChange = (next: Condition) => {
     onRootChange(updateCondition(child, [], () => next));
@@ -231,12 +213,7 @@ function NestedGroup({
   const addGroup = () => {
     rootChange(
       updateCondition(child, [], (node) =>
-        node.type === "group"
-          ? {
-              ...node,
-              conditions: [...node.conditions, newGroupCondition()],
-            }
-          : node,
+        node.type === "group" ? groupAppend(node, newGroupCondition()) : node,
       ),
     );
   };
@@ -245,10 +222,7 @@ function NestedGroup({
     rootChange(
       updateCondition(child, [], (node) =>
         node.type === "group"
-          ? {
-              ...node,
-              conditions: [...node.conditions, newComparisonCondition()],
-            }
+          ? groupAppend(node, newComparisonCondition())
           : node,
       ),
     );
@@ -259,18 +233,23 @@ function NestedGroup({
       className="border-s-4 bg-background/40 p-2"
       style={{ borderInlineStartColor: color }}
     >
-      <div className="flex items-center justify-between gap-2 pb-2">
-        <Combinator
-          onChange={(operator) => {
-            rootChange(
-              updateCondition(child, [], (node) =>
-                node.type === "group" ? { ...node, operator } : node,
-              ),
-            );
-          }}
-          operator={child.operator}
-        />
+      <div className="flex items-start justify-between gap-2 pb-2">
+        <div className="min-w-0 flex-1 space-y-0.5">
+          <Combinator
+            onBlur={() => {
+              conditions.handleBlur();
+              combinator.handleBlur();
+            }}
+            onChange={combinator.handleChange}
+            operator={combinator.state.value as GroupCondition["operator"]}
+          />
+          {conditions.state.meta.isTouched &&
+            !conditions.state.meta.isValid && (
+              <FieldError errors={conditions.state.meta.errors} />
+            )}
+        </div>
         <Button
+          className="shrink-0"
           onClick={onRemoveSelf}
           size="icon-xs"
           title="Remove group"
@@ -279,25 +258,14 @@ function NestedGroup({
           <XIcon className="size-3" />
         </Button>
       </div>
-
       <GroupChildren
-        callbacks={{
-          allFields,
-          onChangeCondition: (index, next) => {
-            rootChange(updateCondition(child, [index], () => next));
-          },
-          onRemoveCondition: (index) => {
-            rootChange(removeCondition(child, [index]));
-          },
-          onRemoveGroup: (index) => {
-            rootChange(removeCondition(child, [index]));
-          },
-        }}
+        allFields={allFields}
         condition={child}
+        form={form}
+        nodeName={nodeName}
         onRootChange={onRootChange}
         path={path}
       />
-
       <div className="flex gap-1.5 pt-2">
         <Button
           className="flex-1"

@@ -1,18 +1,14 @@
+/* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
 import { StarIcon } from "lucide-react";
+
+import type { FieldComponentProps } from "@/components/builder/form/form-definition";
 
 import { cn } from "@/lib/cn";
 
-import type { FieldInputPropsFor } from "../types";
-
-export function RatingField({
-  disabled,
-  field,
-  onBlur,
-  onChange,
-  value,
-}: FieldInputPropsFor<"rating">) {
-  const { max = 5, min = 1 } = field.attributes;
-  const ratingValue = value ? Number(value) : 0;
+export function RatingField({ definition, field }: FieldComponentProps) {
+  const attributes = definition.attributes as { max?: number; min?: number };
+  const { max = 5, min = 1 } = attributes;
+  const ratingValue = field.state.value ? Number(field.state.value) : 0;
 
   return (
     <div className="flex items-center gap-1">
@@ -20,12 +16,12 @@ export function RatingField({
         (star) => (
           <button
             className="p-0.5 transition-colors"
-            disabled={disabled}
             key={star}
             onClick={() => {
-              onChange(String(star));
-              onBlur();
+              field.handleChange(String(star));
+              field.handleBlur();
             }}
+            title={`Rate ${star}`}
             type="button"
           >
             <StarIcon

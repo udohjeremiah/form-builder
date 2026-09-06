@@ -17,21 +17,16 @@ export const CONDITION_OPERATOR_LABELS: Readonly<
   not_in: "Is not one of",
 };
 
-// Operators for which a stored value is a list of alternatives rather than a
-// single scalar (e.g. "Is one of"). Values are one-per-line when edited.
 const MULTI_VALUE_OPERATORS: ReadonlySet<ConditionOperator> = new Set([
   "in",
   "not_in",
 ]);
 
-// Operators that are satisfied by the mere presence/absence of a value, so no
-// expected-value input is offered.
 const PRESENCE_OPERATORS: ReadonlySet<ConditionOperator> = new Set([
   "empty",
   "not_empty",
 ]);
 
-// Operators that make sense for free-text-like values.
 const TEXT_OPERATORS: readonly ConditionOperator[] = [
   "eq",
   "neq",
@@ -43,7 +38,6 @@ const TEXT_OPERATORS: readonly ConditionOperator[] = [
   "not_empty",
 ];
 
-// Ordered values support both equality and magnitude comparisons.
 const COMPARABLE_OPERATORS: readonly ConditionOperator[] = [
   "eq",
   "neq",
@@ -57,7 +51,6 @@ const COMPARABLE_OPERATORS: readonly ConditionOperator[] = [
   "not_empty",
 ];
 
-// Discrete choices compare by equality (or membership in a set) only.
 const CHOICE_OPERATORS: readonly ConditionOperator[] = [
   "eq",
   "neq",
@@ -89,12 +82,11 @@ const OPERATORS_BY_FIELD_TYPE: Record<FieldType, readonly ConditionOperator[]> =
     url: TEXT_OPERATORS,
   };
 
-export const getOperatorsForType = (
-  type: FieldType,
-): readonly ConditionOperator[] => OPERATORS_BY_FIELD_TYPE[type];
+export const getOperatorsForType = (type: FieldType) =>
+  OPERATORS_BY_FIELD_TYPE[type];
 
-export const isMultiValueOperator = (operator: ConditionOperator): boolean =>
+export const isMultiValueOperator = (operator: ConditionOperator) =>
   MULTI_VALUE_OPERATORS.has(operator);
 
-export const isPresenceOperator = (operator: ConditionOperator): boolean =>
+export const isPresenceOperator = (operator: ConditionOperator) =>
   PRESENCE_OPERATORS.has(operator);

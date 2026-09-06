@@ -113,7 +113,7 @@ export const FILE_TYPE_OPTIONS: {
   },
 ];
 
-interface AttributeEditorMeta<Type extends FieldType = FieldType> {
+export interface AttributeEditorMeta<Type extends FieldType = FieldType> {
   inputType?: string;
   key: Exclude<keyof FieldAttributesByType[Type], keyof BaseFieldAttributes>;
   kind:
@@ -236,7 +236,7 @@ const FIELD_REGISTRY: {
       { key: "multiple", kind: "boolean", label: "Multiple" },
     ],
     defaults: () => ({
-      accept: ["image/*", "application/pdf"],
+      accept: ["image/jpeg", "image/png", "application/pdf"],
     }),
     icon: "UploadIcon",
     label: "File",

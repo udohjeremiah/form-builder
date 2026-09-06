@@ -1,31 +1,33 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
+import type { FieldComponentProps } from "@/components/builder/form/form-definition";
+
 import { Slider } from "@/components/ui/slider";
 
-import type { FieldInputPropsFor } from "../types";
-
-export function SliderField({
-  disabled,
-  field,
-  onBlur,
-  onChange,
-  value,
-}: FieldInputPropsFor<"slider">) {
-  const { max = 100, min = 0, step = 1 } = field.attributes;
-  const sliderValue = value ? Number(value) : Math.min(Math.max(50, min), max);
+export function SliderField({ definition, field }: FieldComponentProps) {
+  const attributes = definition.attributes as {
+    max?: number;
+    min?: number;
+    step?: number;
+  };
+  const { max = 100, min = 0, step = 1 } = attributes;
+  const sliderValue = field.state.value
+    ? Number(field.state.value)
+    : Math.min(Math.max(50, min), max);
 
   return (
     <div className="space-y-3">
       <Slider
         className="w-full"
-        disabled={disabled}
+        id={field.name}
         max={max}
         min={min}
         onValueChange={(v: number | readonly number[]) => {
           if (Array.isArray(v)) {
-            onChange(String(v[0]));
+            field.handleChange(String(v[0]));
           } else {
-            onChange(String(v));
+            field.handleChange(String(v));
           }
-          onBlur();
+          field.handleBlur();
         }}
         step={step}
         value={[sliderValue]}

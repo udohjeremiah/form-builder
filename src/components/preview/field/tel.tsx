@@ -1,7 +1,7 @@
-import type { FieldInputPropsFor } from "../types";
+import type { FieldComponentProps } from "@/components/builder/form/form-definition";
 
 import { TextLikeField } from "./text-like";
 
-export function TelField(props: FieldInputPropsFor<"tel">) {
+export function TelField(props: FieldComponentProps) {
   return <TextLikeField {...props} type="tel" />;
 }

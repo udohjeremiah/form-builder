@@ -1,7 +1,17 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 "use client";
 
+import type { ZodType } from "zod";
+
+import {
+  type AnyFieldApi,
+  type AnyFormApi,
+  useField,
+  useForm,
+  useSelector,
+} from "@tanstack/react-form";
 import { PlusIcon, Settings2Icon, XIcon } from "lucide-react";
-import { Fragment, useState } from "react";
+import { Fragment, type ReactNode, useEffect, useRef, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -27,8 +37,13 @@ import {
   EmptyHeader,
   EmptyMedia,
 } from "@/components/ui/empty";
+import {
+  Field,
+  FieldContent,
+  FieldError,
+  FieldLabel,
+} from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -47,9 +62,11 @@ import type {
   ConditionGroup,
   FieldLogic,
   FieldRule,
+  SectionAttributes,
+  StepAttributes,
 } from "../index";
 
-import { OptionsValueInput } from "../options-value-input";
+import { buildFieldSchema, buildStructureSchema } from "../schema";
 import {
   AUTOCOMPLETE_OPTIONS,
   CONDITION_OPERATOR_LABELS,
@@ -58,7 +75,11 @@ import {
   isMultiValueOperator,
   isPresenceOperator,
 } from "./field-registry";
-import { getActiveOptions } from "./form-definition";
+import {
+  getStructureAttributes,
+  type StructureAttributeMeta,
+  type StructurePosition,
+} from "./structure-registry";
 
 type EffectKey = keyof FieldLogic;
 
@@ -70,11 +91,6 @@ const CONDITION_EFFECTS: { label: string; value: EffectKey }[] = [
 
 const NEW_RULE: FieldRule = { fieldId: "", operator: "not_empty" };
 
-/**
- * A self-contained condition builder that drives a single ConditionGroup.
- * The owning field can be excluded from the candidate field list via
- * `excludeFieldId` to avoid self-referential conditions.
- */
 const ConditionEditor = ({
   allFields,
   excludeFieldId,
@@ -104,30 +120,30 @@ const ConditionEditor = ({
 
   return (
     <div className="space-y-2 rounded-lg border border-border/60 bg-muted/50 p-2.5">
-      <div className="space-y-1">
-        <Label className="text-[10px] font-medium text-muted-foreground/60">
-          Match
-        </Label>
-        <Select
-          onValueChange={(v) => {
-            if (!v) return;
-            onChange({ ...group, combinator: v });
-          }}
-          value={group.combinator}
-        >
-          <SelectTrigger className="h-7 w-full text-xs">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem className="text-xs" value="and">
-              All conditions
-            </SelectItem>
-            <SelectItem className="text-xs" value="or">
-              Any condition
-            </SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+      <Field>
+        <FieldLabel>Match</FieldLabel>
+        <FieldContent>
+          <Select
+            onValueChange={(v) => {
+              if (!v) return;
+              onChange({ ...group, combinator: v });
+            }}
+            value={group.combinator}
+          >
+            <SelectTrigger className="h-7 w-full text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem className="text-xs" value="and">
+                All conditions
+              </SelectItem>
+              <SelectItem className="text-xs" value="or">
+                Any condition
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </FieldContent>
+      </Field>
 
       {group.rules.length === 0 && (
         <Empty className="border border-dashed">
@@ -141,8 +157,6 @@ const ConditionEditor = ({
 
       {group.rules.map((rule, index) => {
         const targetField = allFields?.find((f) => f.id === rule.fieldId);
-        // Until a target field is chosen, offer the broadest (text-like)
-        // operator set.
         const operators = getOperatorsForType(targetField?.type ?? "text");
 
         return (
@@ -199,6 +213,10 @@ const ConditionEditor = ({
                 </Button>
               </div>
 
+              {rule.fieldId.trim().length === 0 && (
+                <FieldError errors={[{ message: "Select a field" }]} />
+              )}
+
               <Select
                 onValueChange={(v) => {
                   if (!v) return;
@@ -223,11 +241,17 @@ const ConditionEditor = ({
               </Select>
 
               <RuleValueInput
-                field={allFields?.find((f) => f.id === rule.fieldId)}
                 index={index}
                 rule={rule}
                 updateRule={updateRule}
               />
+
+              {!isPresenceOperator(rule.operator) &&
+                (rule.value ?? "").trim().length === 0 && (
+                  <FieldError
+                    errors={[{ message: "Expected value is required" }]}
+                  />
+                )}
             </div>
           </div>
         );
@@ -247,38 +271,16 @@ const ConditionEditor = ({
   );
 };
 
-/**
- * The expected-value editor for a single field rule. Renders nothing for
- * presence operators, a one-per-line textarea for list operators, and a
- * single-line input otherwise.
- */
 const RuleValueInput = ({
-  field,
   index,
   rule,
   updateRule,
 }: {
-  field?: AnyFieldDefinition;
   index: number;
   rule: FieldRule;
   updateRule: (index: number, patch: Partial<FieldRule>) => void;
 }) => {
   if (isPresenceOperator(rule.operator)) return null;
-
-  const options = field ? getActiveOptions(field) : [];
-  if (options.length > 0) {
-    return (
-      <OptionsValueInput
-        fullWidth
-        onChange={(value) => {
-          updateRule(index, { value });
-        }}
-        operator={rule.operator}
-        options={options}
-        value={rule.value ?? ""}
-      />
-    );
-  }
 
   if (isMultiValueOperator(rule.operator)) {
     return (
@@ -347,79 +349,196 @@ const parseNumberInput = (raw: string): number | undefined => {
   return Number.isNaN(parsed) ? undefined : parsed;
 };
 
-const NumberAttribute = ({
+type FieldAttributeValues = Record<
+  string,
+  boolean | number | string | string[] | undefined
+>;
+
+const invalid = (field: AnyFieldApi): boolean =>
+  field.state.meta.isTouched && !field.state.meta.isValid;
+
+const AttributeField = ({
+  children,
+  field,
   label,
-  onValueChange,
-  value,
 }: {
+  children: ReactNode;
+  field: AnyFieldApi;
   label: string;
-  onValueChange: (value: number | undefined) => void;
-  value: number | undefined;
 }) => (
-  <div className="space-y-1">
-    <Label className="text-[11px] font-medium text-muted-foreground/70">
-      {label}
-    </Label>
-    <Input
-      className="h-8 text-[13px]"
-      onChange={(event) => {
-        onValueChange(parseNumberInput(event.target.value));
-      }}
-      type="number"
-      value={value ?? ""}
-    />
-  </div>
+  <Field data-invalid={invalid(field) || undefined}>
+    <FieldLabel htmlFor={field.name}>{label}</FieldLabel>
+    <FieldContent>
+      {children}
+      {invalid(field) && <FieldError errors={field.state.meta.errors} />}
+    </FieldContent>
+  </Field>
 );
 
-const TextAttribute = ({
-  label,
-  onValueChange,
-  placeholder,
-  value,
+const StructureAttribute = ({
+  form,
+  meta,
 }: {
-  label: string;
-  onValueChange: (value: string) => void;
-  placeholder?: string;
-  value: string;
-}) => (
-  <div className="space-y-1">
-    <Label className="text-[11px] font-medium text-muted-foreground/70">
-      {label}
-    </Label>
-    <Input
-      className="h-8 text-[13px]"
-      onChange={(event) => {
-        onValueChange(event.target.value);
-      }}
-      placeholder={placeholder}
-      type="text"
-      value={value}
-    />
-  </div>
-);
-
-const LinesAttribute = ({
-  label,
-  onValueChange,
-  placeholder,
-  value,
-}: {
-  label: string;
-  onValueChange: (value: string[]) => void;
-  placeholder?: string;
-  value: string[];
+  form: AnyFormApi;
+  meta: StructureAttributeMeta;
 }) => {
-  const [draft, setDraft] = useState(() => value.join("\n"));
+  const field = useField({ form, name: meta.key });
 
   return (
-    <div className="space-y-1">
-      <Label className="text-[11px] font-medium text-muted-foreground/70">
-        {label}
-      </Label>
+    <Field data-invalid={invalid(field) || undefined}>
+      <FieldLabel htmlFor={field.name}>{meta.label}</FieldLabel>
+      <FieldContent>
+        {meta.kind === "multiline" ? (
+          <Textarea
+            className="h-32 resize-none overflow-y-auto font-mono text-xs"
+            id={field.name}
+            onBlur={field.handleBlur}
+            onChange={(event) => {
+              field.handleChange(event.target.value);
+            }}
+            placeholder={meta.placeholder}
+            value={String(field.state.value ?? "")}
+          />
+        ) : (
+          <Input
+            id={field.name}
+            onBlur={field.handleBlur}
+            onChange={(event) => {
+              field.handleChange(event.target.value);
+            }}
+            placeholder={meta.placeholder}
+            value={String(field.state.value ?? "")}
+          />
+        )}
+        {invalid(field) && <FieldError errors={field.state.meta.errors} />}
+      </FieldContent>
+    </Field>
+  );
+};
+
+const structurePosition = (node: StructureNode): StructurePosition =>
+  node.kind === "step"
+    ? {
+        isFirstStep: node.index === 0,
+        isLastStep: node.index === node.stepCount - 1,
+      }
+    : { isFirstStep: false, isLastStep: false };
+
+const structureAttributesFor = (node: StructureNode) =>
+  getStructureAttributes(node.kind, structurePosition(node));
+
+export type StructureNode =
+  | { attributes: SectionAttributes; id: string; kind: "section" }
+  | {
+      attributes: StepAttributes;
+      id: string;
+      index: number;
+      kind: "step";
+      stepCount: number;
+    };
+
+type FieldPropertiesSelection =
+  | { field: AnyFieldDefinition | null; kind: "field" }
+  | { kind: "structure"; node: StructureNode };
+
+const emptyToUndefined = (value: string | undefined) =>
+  value === "" ? undefined : value;
+
+const NumberAttribute = ({
+  form,
+  label,
+  name,
+}: {
+  form: AnyFormApi;
+  label: string;
+  name: string;
+}) => {
+  // Typing is kept in a local draft and committed on blur so partial input
+  // ("-", "1.") never mutates the attribute. Re-mounting per selected field
+  // reseeds the draft, and the committed value drives TanStack validation.
+  const field = useField({ form, name });
+  const [draft, setDraft] = useState(() =>
+    field.state.value === undefined ? "" : String(field.state.value),
+  );
+
+  return (
+    <AttributeField field={field} label={label}>
+      <Input
+        id={field.name}
+        onBlur={() => {
+          field.handleChange(parseNumberInput(draft));
+          field.handleBlur();
+        }}
+        onChange={(event) => {
+          setDraft(event.target.value);
+        }}
+        type="number"
+        value={draft}
+      />
+    </AttributeField>
+  );
+};
+
+const TextAttribute = ({
+  form,
+  label,
+  name,
+  placeholder,
+}: {
+  form: AnyFormApi;
+  label: string;
+  name: string;
+  placeholder?: string;
+}) => {
+  const field = useField({ form, name });
+
+  return (
+    <AttributeField field={field} label={label}>
+      <Input
+        id={field.name}
+        onBlur={field.handleBlur}
+        onChange={(event) => {
+          field.handleChange(
+            event.target.value === "" ? undefined : event.target.value,
+          );
+        }}
+        placeholder={placeholder}
+        type="text"
+        value={field.state.value ?? ""}
+      />
+    </AttributeField>
+  );
+};
+
+const LinesAttribute = ({
+  form,
+  label,
+  name,
+  placeholder,
+}: {
+  form: AnyFormApi;
+  label: string;
+  name: string;
+  placeholder?: string;
+}) => {
+  // Like the number attrs, lines commit on blur: stripping blanks live would
+  // eat the trailing line Enter just created, so the raw draft is cleaned and
+  // committed only once focus leaves.
+  const field = useField({ form, name });
+  const [draft, setDraft] = useState(() =>
+    Array.isArray(field.state.value) ? field.state.value.join("\n") : "",
+  );
+
+  return (
+    <AttributeField field={field} label={label}>
       <Textarea
         className="h-32 resize-none overflow-y-auto font-mono text-xs"
+        id={field.name}
         onBlur={() => {
-          onValueChange(draft.split("\n").filter((line) => line.length > 0));
+          field.handleChange(
+            draft.split("\n").filter((line) => line.length > 0),
+          );
+          field.handleBlur();
         }}
         onChange={(event) => {
           setDraft(event.target.value);
@@ -427,7 +546,7 @@ const LinesAttribute = ({
         placeholder={placeholder}
         value={draft}
       />
-    </div>
+    </AttributeField>
   );
 };
 
@@ -440,108 +559,114 @@ type AttributeOptionGroup = readonly {
 }[];
 
 const BooleanAttribute = ({
+  form,
   label,
-  onValueChange,
-  value,
+  name,
 }: {
+  form: AnyFormApi;
   label: string;
-  onValueChange: (value: boolean) => void;
-  value: boolean | undefined;
-}) => (
-  <div className="space-y-1">
-    <Label className="text-[11px] font-medium text-muted-foreground/70">
-      {label}
-    </Label>
-    <Select
-      onValueChange={(v) => {
-        if (!v) return;
-        onValueChange(v === "yes");
-      }}
-      value={value ? "yes" : "no"}
-    >
-      <SelectTrigger className="h-7 w-full text-xs">
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem className="text-xs" value="yes">
-          Yes
-        </SelectItem>
-        <SelectItem className="text-xs" value="no">
-          No
-        </SelectItem>
-      </SelectContent>
-    </Select>
-  </div>
-);
+  name: string;
+}) => {
+  const field = useField({ form, name });
+
+  return (
+    <AttributeField field={field} label={label}>
+      <Select
+        onValueChange={(v) => {
+          if (!v) return;
+          field.handleChange(v === "yes");
+        }}
+        value={field.state.value ? "yes" : "no"}
+      >
+        <SelectTrigger className="h-7 w-full text-xs">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem className="text-xs" value="yes">
+            Yes
+          </SelectItem>
+          <SelectItem className="text-xs" value="no">
+            No
+          </SelectItem>
+        </SelectContent>
+      </Select>
+    </AttributeField>
+  );
+};
 
 const AutocompleteAttribute = ({
+  form,
   label,
-  onValueChange,
-  value,
+  name,
 }: {
+  form: AnyFormApi;
   label: string;
-  onValueChange: (value: string | undefined) => void;
-  value: string | undefined;
-}) => (
-  <div className="space-y-1">
-    <Label className="text-[11px] font-medium text-muted-foreground/70">
-      {label}
-    </Label>
-    <Select
-      onValueChange={(v) => {
-        onValueChange(v == null || v === "off" ? undefined : v);
-      }}
-      value={value ?? "off"}
-    >
-      <SelectTrigger className="h-7 w-full text-xs">
-        <SelectValue placeholder="Off" />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem className="text-xs" value="off">
-          Off
-        </SelectItem>
-        {AUTOCOMPLETE_OPTIONS.map((group) => (
-          <SelectGroup key={group.label}>
-            <SelectLabel className="text-[10px]">{group.label}</SelectLabel>
-            {group.options.map((option) => (
-              <SelectItem
-                className="text-xs"
-                key={option.value}
-                value={option.value}
-              >
-                {option.label}
-              </SelectItem>
-            ))}
-          </SelectGroup>
-        ))}
-      </SelectContent>
-    </Select>
-  </div>
-);
+  name: string;
+}) => {
+  const field = useField({ form, name });
+
+  return (
+    <AttributeField field={field} label={label}>
+      <Select
+        onValueChange={(v) => {
+          field.handleChange(v == null || v === "off" ? undefined : v);
+        }}
+        value={field.state.value ?? "off"}
+      >
+        <SelectTrigger className="h-7 w-full text-xs">
+          <SelectValue placeholder="Off" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem className="text-xs" value="off">
+            Off
+          </SelectItem>
+          {AUTOCOMPLETE_OPTIONS.map((group) => (
+            <SelectGroup key={group.label}>
+              <SelectLabel className="text-[10px]">{group.label}</SelectLabel>
+              {group.options.map((option) => (
+                <SelectItem
+                  className="text-xs"
+                  key={option.value}
+                  value={option.value}
+                >
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          ))}
+        </SelectContent>
+      </Select>
+    </AttributeField>
+  );
+};
 
 const MultiSelectAttribute = ({
+  form,
   label,
-  onValueChange,
+  name,
   options,
 }: {
+  form: AnyFormApi;
   label: string;
-  onValueChange: (value: string[]) => void;
+  name: string;
   options: AttributeOptionGroup;
 }) => {
   const anchor = useComboboxAnchor();
+  const field = useField({ form, name });
 
   return (
-    <div className="space-y-1">
-      <Label className="text-[11px] font-medium text-muted-foreground/70">
-        {label}
-      </Label>
+    <AttributeField field={field} label={label}>
       <Combobox
         autoHighlight={true}
         items={options}
         multiple={true}
-        onValueChange={onValueChange}
+        onValueChange={field.handleChange}
       >
-        <ComboboxChips className="w-full min-w-0" ref={anchor}>
+        <ComboboxChips
+          className="w-full min-w-0"
+          onBlur={field.handleBlur}
+          ref={anchor}
+        >
           <ComboboxValue>
             {(values: string[]) => (
               <Fragment>
@@ -576,57 +701,159 @@ const MultiSelectAttribute = ({
           </ComboboxList>
         </ComboboxContent>
       </Combobox>
-    </div>
+    </AttributeField>
   );
 };
 
 const DateTimeAttribute = ({
+  form,
   inputType,
   label,
-  onValueChange,
-  value,
+  name,
 }: {
+  form: AnyFormApi;
   inputType: string;
   label: string;
-  onValueChange: (value: string | undefined) => void;
-  value: string | undefined;
-}) => (
-  <div className="space-y-1">
-    <Label className="text-[11px] font-medium text-muted-foreground/70">
-      {label}
-    </Label>
-    <Input
-      className="h-8 text-[13px]"
-      onChange={(event) => {
-        onValueChange(
-          event.target.value === "" ? undefined : event.target.value,
-        );
-      }}
-      type={inputType}
-      value={value ?? ""}
-    />
-  </div>
-);
+  name: string;
+}) => {
+  const field = useField({ form, name });
+
+  return (
+    <AttributeField field={field} label={label}>
+      <Input
+        id={field.name}
+        onBlur={field.handleBlur}
+        onChange={(event) => {
+          field.handleChange(
+            event.target.value === "" ? undefined : event.target.value,
+          );
+        }}
+        type={inputType}
+        value={field.state.value ?? ""}
+      />
+    </AttributeField>
+  );
+};
 
 export function FieldProperties({
   allFields,
-  field,
-  fullWidth,
+  isMobile,
   onChange,
+  onStructureChange,
+  selection,
 }: {
   allFields?: AnyFieldDefinition[];
-  field: AnyFieldDefinition | null;
-  fullWidth?: boolean;
+  isMobile?: boolean;
   onChange: (
     id: string,
     updater: (field: AnyFieldDefinition) => AnyFieldDefinition,
   ) => void;
+  onStructureChange: (
+    id: string,
+    patch: SectionAttributes | StepAttributes,
+  ) => void;
+  selection: FieldPropertiesSelection;
 }) {
-  if (!field) {
+  const defaultValues: FieldAttributeValues =
+    selection.kind === "field"
+      ? ((selection.field?.attributes ?? {}) as unknown as FieldAttributeValues)
+      : (selection.node.attributes as unknown as FieldAttributeValues);
+
+  let schema: undefined | ZodType;
+  if (selection.kind === "structure") {
+    schema = buildStructureSchema(
+      selection.node.kind,
+      structurePosition(selection.node),
+    );
+  } else if (selection.field) {
+    schema = buildFieldSchema(selection.field);
+  }
+
+  const form = useForm({
+    defaultValues,
+    validators: schema
+      ? ({
+          onBlur: schema,
+          onChange: schema,
+          onSubmit: schema,
+        } as never)
+      : undefined,
+  });
+
+  const values = useSelector(form.store, (state) => state.values);
+  const firstRun = useRef(true);
+  const latest = useRef({ onChange, onStructureChange, selection });
+
+  useEffect(() => {
+    latest.current = { onChange, onStructureChange, selection };
+  }, [onChange, onStructureChange, selection]);
+
+  useEffect(() => {
+    if (firstRun.current) {
+      firstRun.current = false;
+      return;
+    }
+
+    const current = latest.current;
+    if (current.selection.kind === "field") {
+      const field = current.selection.field;
+      if (!field) return;
+      current.onChange(field.id, (existing) => ({
+        ...existing,
+        attributes: values as unknown as (typeof existing)["attributes"],
+      }));
+      return;
+    }
+
+    const node = current.selection.node;
+    const attributes: Partial<Record<string, string | undefined>> = {};
+
+    for (const meta of structureAttributesFor(node)) {
+      attributes[meta.key] = emptyToUndefined(
+        values[meta.key] as string | undefined,
+      );
+    }
+    current.onStructureChange(node.id, attributes);
+  }, [values]);
+
+  if (selection.kind === "structure") {
+    const node = selection.node;
+
     return (
       <div
         className={cn(
-          fullWidth ? "w-full" : "w-full min-w-0 md:w-[40%]",
+          isMobile ? "w-full" : "w-full min-w-0 md:w-[40%]",
+          "overflow-y-auto border-l border-border bg-background p-4",
+        )}
+        key={node.id}
+      >
+        <div className="mb-4 flex items-center justify-between">
+          <span className="truncate font-mono text-xs text-foreground/70">
+            {node.id}
+          </span>
+          <Badge className="text-[9px] uppercase" variant="secondary">
+            {node.kind}
+          </Badge>
+        </div>
+
+        <h3 className="mb-4 text-[11px] font-semibold tracking-widest text-muted-foreground/60 uppercase">
+          Properties
+        </h3>
+
+        <div className="space-y-3">
+          {structureAttributesFor(node).map((meta) => (
+            <StructureAttribute form={form} key={meta.key} meta={meta} />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (!selection.field) {
+    return (
+      <div
+        className={cn(
+          isMobile ? "w-full" : "w-full min-w-0 md:w-[40%]",
           "flex h-full items-stretch justify-center border-l border-border bg-background p-6",
         )}
       >
@@ -642,37 +869,18 @@ export function FieldProperties({
     );
   }
 
+  const field = selection.field;
+
   const entry = getFieldEntry(field.type);
-
-  const setAttribute = <T extends AnyFieldDefinition["attributes"]>(
-    patch: Partial<T>,
-  ) => {
-    onChange(field.id, () => ({
-      ...field,
-      attributes: { ...field.attributes, ...patch },
-    }));
-  };
-
-  const setAttributeValue = (key: string, value: unknown) => {
-    onChange(field.id, () => ({
-      ...field,
-      attributes: {
-        ...field.attributes,
-        [key]: value,
-      },
-    }));
-  };
-
-  // The active effect is whichever key currently holds a group; `show` wins
-  // ties so newly enabled conditioning lands on the familiar effect.
-  const activeEffect =
-    CONDITION_EFFECTS.find((effect) => field.logic[effect.value])?.value ??
-    "show";
-  const activeGroup: ConditionGroup | undefined = field.logic[activeEffect];
 
   const setLogic = (logic: FieldLogic) => {
     onChange(field.id, () => ({ ...field, logic }));
   };
+
+  const activeEffect =
+    CONDITION_EFFECTS.find((effect) => field.logic[effect.value])?.value ??
+    "show";
+  const activeGroup: ConditionGroup | undefined = field.logic[activeEffect];
 
   const updateGroup = (
     transform: (group: ConditionGroup) => ConditionGroup,
@@ -687,7 +895,7 @@ export function FieldProperties({
   return (
     <div
       className={cn(
-        fullWidth ? "w-full" : "w-full min-w-0 md:w-[40%]",
+        isMobile ? "w-full" : "w-full min-w-0 md:w-[40%]",
         "overflow-y-auto border-l border-border bg-background p-4",
       )}
       key={field.id}
@@ -700,79 +908,104 @@ export function FieldProperties({
           {field.type}
         </Badge>
       </div>
-
       <h3 className="mb-4 text-[11px] font-semibold tracking-widest text-muted-foreground/60 uppercase">
         Properties
       </h3>
-
       <div className="space-y-3">
-        <div className="space-y-1">
-          <Label className="text-[11px] font-medium text-muted-foreground/70">
-            Label <span className="text-destructive">*</span>
-          </Label>
-          <Input
-            className="h-8 text-[13px]"
-            onChange={(event) => {
-              setAttribute({ label: event.target.value });
-            }}
-            value={field.attributes.label}
-          />
-        </div>
+        <form.Field name="label">
+          {(labelField) => (
+            <Field data-invalid={invalid(labelField) || undefined}>
+              <FieldLabel htmlFor={labelField.name}>Label</FieldLabel>
+              <FieldContent>
+                <Input
+                  id={labelField.name}
+                  onBlur={labelField.handleBlur}
+                  onChange={(event) => {
+                    labelField.handleChange(event.target.value);
+                  }}
+                  value={String(labelField.state.value ?? "")}
+                />
+                {invalid(labelField) && (
+                  <FieldError errors={labelField.state.meta.errors} />
+                )}
+              </FieldContent>
+            </Field>
+          )}
+        </form.Field>
+        <form.Field name="description">
+          {(descriptionField) => (
+            <Field>
+              <FieldLabel htmlFor={descriptionField.name}>
+                Description
+              </FieldLabel>
+              <FieldContent>
+                <Input
+                  id={descriptionField.name}
+                  onChange={(event) => {
+                    descriptionField.handleChange(
+                      event.target.value === ""
+                        ? undefined
+                        : event.target.value,
+                    );
+                  }}
+                  placeholder="Additional context for the user"
+                  value={String(descriptionField.state.value ?? "")}
+                />
+              </FieldContent>
+            </Field>
+          )}
+        </form.Field>
+        <form.Field name="placeholder">
+          {(placeholderField) => (
+            <Field data-invalid={invalid(placeholderField) || undefined}>
+              <FieldLabel htmlFor={placeholderField.name}>
+                Placeholder
+              </FieldLabel>
+              <FieldContent>
+                <Input
+                  id={placeholderField.name}
+                  onBlur={placeholderField.handleBlur}
+                  onChange={(event) => {
+                    placeholderField.handleChange(event.target.value);
+                  }}
+                  value={String(placeholderField.state.value ?? "")}
+                />
+                {invalid(placeholderField) && (
+                  <FieldError errors={placeholderField.state.meta.errors} />
+                )}
+              </FieldContent>
+            </Field>
+          )}
+        </form.Field>
 
-        <div className="space-y-1">
-          <Label className="text-[11px] font-medium text-muted-foreground/70">
-            Description
-          </Label>
-          <Input
-            className="h-8 text-[13px]"
-            onChange={(event) => {
-              setAttribute({
-                description:
-                  event.target.value === "" ? undefined : event.target.value,
-              });
-            }}
-            placeholder="Additional context for the user"
-            value={field.attributes.description ?? ""}
-          />
-        </div>
-
-        <div className="space-y-1">
-          <Label className="text-[11px] font-medium text-muted-foreground/70">
-            Placeholder
-          </Label>
-          <Input
-            className="h-8 text-[13px]"
-            onChange={(event) => {
-              setAttribute({ placeholder: event.target.value });
-            }}
-            value={field.attributes.placeholder ?? ""}
-          />
-        </div>
-
-        <div className="space-y-1">
-          <Label className="text-[11px] font-medium text-muted-foreground/70">
-            Required
-          </Label>
-          <Select
-            onValueChange={(v) => {
-              if (!v) return;
-              setAttribute({ required: v === "yes" });
-            }}
-            value={field.attributes.required ? "yes" : "no"}
-          >
-            <SelectTrigger className="h-7 w-full text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem className="text-xs" value="yes">
-                Yes
-              </SelectItem>
-              <SelectItem className="text-xs" value="no">
-                No
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+        <form.Field name="required">
+          {(requiredField) => (
+            <Field>
+              <FieldLabel htmlFor={requiredField.name}>Required</FieldLabel>
+              <FieldContent>
+                <Select
+                  onValueChange={(v) => {
+                    if (!v) return;
+                    requiredField.handleChange(v === "yes");
+                  }}
+                  value={requiredField.state.value ? "yes" : "no"}
+                >
+                  <SelectTrigger className="h-7 w-full text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem className="text-xs" value="yes">
+                      Yes
+                    </SelectItem>
+                    <SelectItem className="text-xs" value="no">
+                      No
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </FieldContent>
+            </Field>
+          )}
+        </form.Field>
 
         {entry.attributes.length > 0 && (
           <>
@@ -784,19 +1017,15 @@ export function FieldProperties({
         )}
 
         {entry.attributes.map((meta) => {
-          const value = (
-            field.attributes as unknown as Record<string, unknown>
-          )[meta.key];
+          const name = String(meta.key);
 
           if (meta.kind === "boolean") {
             return (
               <BooleanAttribute
-                key={meta.key}
+                form={form}
+                key={name}
                 label={meta.label}
-                onValueChange={(v) => {
-                  setAttributeValue(meta.key, v);
-                }}
-                value={typeof value === "boolean" ? value : undefined}
+                name={name}
               />
             );
           }
@@ -804,12 +1033,10 @@ export function FieldProperties({
           if (meta.kind === "autocomplete") {
             return (
               <AutocompleteAttribute
-                key={meta.key}
+                form={form}
+                key={name}
                 label={meta.label}
-                onValueChange={(v) => {
-                  setAttributeValue(meta.key, v);
-                }}
-                value={typeof value === "string" ? value : undefined}
+                name={name}
               />
             );
           }
@@ -818,11 +1045,10 @@ export function FieldProperties({
             const multiOptions = (meta.options ?? []) as AttributeOptionGroup;
             return (
               <MultiSelectAttribute
-                key={meta.key}
+                form={form}
+                key={name}
                 label={meta.label}
-                onValueChange={(v) => {
-                  setAttributeValue(meta.key, v);
-                }}
+                name={name}
                 options={multiOptions}
               />
             );
@@ -831,13 +1057,11 @@ export function FieldProperties({
           if (meta.kind === "datetime") {
             return (
               <DateTimeAttribute
+                form={form}
                 inputType={meta.inputType ?? "text"}
-                key={meta.key}
+                key={name}
                 label={meta.label}
-                onValueChange={(v) => {
-                  setAttributeValue(meta.key, v);
-                }}
-                value={typeof value === "string" ? value : undefined}
+                name={name}
               />
             );
           }
@@ -845,13 +1069,11 @@ export function FieldProperties({
           if (meta.kind === "lines") {
             return (
               <LinesAttribute
-                key={`${field.id}:${String(meta.key)}`}
+                form={form}
+                key={name}
                 label={meta.label}
-                onValueChange={(lines) => {
-                  setAttributeValue(meta.key, lines);
-                }}
+                name={name}
                 placeholder={meta.placeholder}
-                value={Array.isArray(value) ? (value as string[]) : []}
               />
             );
           }
@@ -859,25 +1081,21 @@ export function FieldProperties({
           if (meta.kind === "number") {
             return (
               <NumberAttribute
-                key={meta.key}
+                form={form}
+                key={name}
                 label={meta.label}
-                onValueChange={(v) => {
-                  setAttributeValue(meta.key, v);
-                }}
-                value={typeof value === "number" ? value : undefined}
+                name={name}
               />
             );
           }
 
           return (
             <TextAttribute
-              key={meta.key}
+              form={form}
+              key={name}
               label={meta.label}
-              onValueChange={(v) => {
-                setAttributeValue(meta.key, v === "" ? undefined : v);
-              }}
+              name={name}
               placeholder={meta.placeholder}
-              value={typeof value === "string" ? value : ""}
             />
           );
         })}
@@ -889,70 +1107,68 @@ export function FieldProperties({
             Behavior
           </h3>
 
-          <div className="mb-2 space-y-1">
-            <Label className="text-[11px] font-medium text-muted-foreground/70">
-              Conditionally
-            </Label>
-            <Select
-              onValueChange={(v) => {
-                if (!v) return;
-                if (v === "yes") {
-                  setLogic({
-                    ...field.logic,
-                    [activeEffect]: { combinator: "and", rules: [] },
-                  });
-                  return;
-                }
-                // Disabling conditioning clears every effect.
-                setLogic({});
-              }}
-              value={activeGroup ? "yes" : "no"}
-            >
-              <SelectTrigger className="h-7 w-full text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem className="text-xs" value="yes">
-                  Yes
-                </SelectItem>
-                <SelectItem className="text-xs" value="no">
-                  No
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
+          <Field className="mb-2">
+            <FieldLabel>Conditionally</FieldLabel>
+            <FieldContent>
+              <Select
+                onValueChange={(v) => {
+                  if (!v) return;
+                  if (v === "yes") {
+                    setLogic({
+                      ...field.logic,
+                      [activeEffect]: { combinator: "and", rules: [] },
+                    });
+                    return;
+                  }
+                  // Disabling conditioning clears every effect.
+                  setLogic({});
+                }}
+                value={activeGroup ? "yes" : "no"}
+              >
+                <SelectTrigger className="h-7 w-full text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem className="text-xs" value="yes">
+                    Yes
+                  </SelectItem>
+                  <SelectItem className="text-xs" value="no">
+                    No
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </FieldContent>
+          </Field>
           {!!activeGroup && (
             <>
-              <div className="mb-2 space-y-1">
-                <Label className="text-[10px] font-medium text-muted-foreground/60">
-                  Effect
-                </Label>
-                <Select
-                  onValueChange={(v) => {
-                    if (!v || v === activeEffect) return;
-                    const { [activeEffect]: moved, ...rest } = field.logic;
-                    setLogic(moved ? { ...rest, [v]: moved } : rest);
-                  }}
-                  value={activeEffect}
-                >
-                  <SelectTrigger className="h-7 w-full text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CONDITION_EFFECTS.map((effect) => (
-                      <SelectItem
-                        className="text-xs"
-                        key={effect.value}
-                        value={effect.value}
-                      >
-                        {effect.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
+              <Field className="mb-2">
+                <FieldLabel>Effect</FieldLabel>
+                <FieldContent>
+                  <Select
+                    onValueChange={(v) => {
+                      if (!v || v === activeEffect) return;
+                      const { [activeEffect]: moved, ...rest } = field.logic;
+                      setLogic(moved ? { ...rest, [v]: moved } : rest);
+                    }}
+                    value={activeEffect}
+                  >
+                    <SelectTrigger className="h-7 w-full text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CONDITION_EFFECTS.map((effect) => (
+                        <SelectItem
+                          className="text-xs"
+                          key={effect.value}
+                          value={effect.value}
+                        >
+                          {effect.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </FieldContent>
+              </Field>
               <ConditionEditor
                 allFields={allFields}
                 excludeFieldId={field.id}

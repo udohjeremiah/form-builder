@@ -1,21 +1,27 @@
 "use client";
 
+import { useField, useForm, useSelector } from "@tanstack/react-form";
 import { ChevronLeftIcon, Trash2Icon } from "lucide-react";
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
 import { Button } from "@/components/ui/button";
+import {
+  Field,
+  FieldContent,
+  FieldError,
+  FieldLabel,
+} from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { generateColor } from "@/lib/generate-color";
 
-import type {
-  AnyFieldDefinition,
-  Condition,
-  GroupCondition,
-  Rule,
-} from "../index";
+import type { AnyFieldDefinition, RuleDefinition } from "../index";
 
-import { newGroupCondition } from "./rule-definition";
+import { ruleFormSchema } from "../schema";
+import {
+  newGroupCondition,
+  type RuleFormHandle,
+  type RuleFormValues,
+} from "./rule-definition";
 import { ThenEditor } from "./then-editor";
 import { WhenEditor } from "./when-editor";
 
@@ -28,20 +34,50 @@ export function RuleEditor({
 }: {
   allFields: AnyFieldDefinition[];
   onBack: () => void;
-  onChange: (rule: Rule) => void;
+  onChange: (rule: RuleDefinition) => void;
   onDelete: () => void;
-  rule: Rule;
+  rule: RuleDefinition;
 }) {
-  // The WHEN tree is always a group root; normalise just in case a restored
-  // draft points somewhere else.
-  const root: GroupCondition =
-    rule.condition.type === "group" ? rule.condition : newGroupCondition();
-
-  const handleRootChange = (next: Condition) => {
-    onChange({ ...rule, condition: next });
+  const defaultValues: RuleFormValues = {
+    area: rule.area,
+    condition:
+      rule.condition.type === "group" ? rule.condition : newGroupCondition(),
+    outcome: rule.outcome,
   };
+  const form = useForm({
+    defaultValues,
+    validators: {
+      onBlur: ruleFormSchema,
+      onChange: ruleFormSchema,
+      onSubmit: ruleFormSchema,
+    } as never,
+  });
+
+  const values = useSelector(form.store, (state) => state.values);
+
+  // Peer-sync: commit changes back to builder context. The latest
+  // `onChange`/`rule` closures are mirrored into a ref inside an effect (refs
+  // must not be written during render), while `firstRun` skips the reseed
+  // render so an externally updated rule does not ping-pong back.
+  const latest = useRef({ onChange, rule });
+  useEffect(() => {
+    latest.current = { onChange, rule };
+  }, [onChange, rule]);
+
+  const firstRun = useRef(true);
+  useEffect(() => {
+    if (firstRun.current) {
+      firstRun.current = false;
+      return;
+    }
+    latest.current.onChange({ ...latest.current.rule, ...values });
+  }, [values]);
 
   const color = useMemo(() => generateColor("rule"), []);
+
+  const rulesForm: RuleFormHandle = form;
+
+  const area = useField({ form: rulesForm, name: "area" });
 
   return (
     <div className="mx-auto w-full max-w-3xl space-y-6 p-4 md:p-6">
@@ -55,7 +91,6 @@ export function RuleEditor({
           Delete rule
         </Button>
       </div>
-
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="text-[11px] font-semibold tracking-widest text-muted-foreground/60 uppercase">
@@ -69,48 +104,40 @@ export function RuleEditor({
           className="space-y-3 border-s-4 bg-background/40 p-2"
           style={{ borderInlineStartColor: color }}
         >
-          <div className="space-y-1">
-            <Label className="text-[11px] font-medium text-muted-foreground/70">
-              Area <span className="text-destructive">*</span>
-            </Label>
-            <Input
-              className="h-8 text-[13px]"
-              onChange={(event) => {
-                onChange({ ...rule, area: event.target.value });
-              }}
-              placeholder="Domain category this rule belongs to..."
-              value={rule.area}
-            />
-          </div>
+          <Field
+            data-invalid={
+              (area.state.meta.isTouched && !area.state.meta.isValid) ||
+              undefined
+            }
+          >
+            <FieldLabel>Area</FieldLabel>
+            <FieldContent>
+              <Input
+                onBlur={area.handleBlur}
+                onChange={(event) => {
+                  area.handleChange(event.target.value);
+                }}
+                placeholder="Domain category this rule belongs to..."
+                value={area.state.value as string}
+              />
+              {area.state.meta.isTouched && !area.state.meta.isValid && (
+                <FieldError errors={area.state.meta.errors} />
+              )}
+            </FieldContent>
+          </Field>
         </div>
       </section>
-
       <section className="space-y-3">
         <h3 className="text-[11px] font-semibold tracking-widest text-muted-foreground/60 uppercase">
           When
         </h3>
-        <WhenEditor
-          allFields={allFields}
-          condition={root}
-          onRemoveGroup={() => {
-            handleRootChange(newGroupCondition());
-          }}
-          onRootChange={handleRootChange}
-          path={[]}
-          removeable={false}
-        />
+        <WhenEditor allFields={allFields} form={rulesForm} />
       </section>
-
       <section className="space-y-3">
         <h3 className="text-[11px] font-semibold tracking-widest text-muted-foreground/60 uppercase">
           Then
         </h3>
-        <ThenEditor
-          onChange={(outcome) => {
-            onChange({ ...rule, outcome });
-          }}
-          outcome={rule.outcome}
-        />
+        <ThenEditor form={rulesForm} />
       </section>
     </div>
   );

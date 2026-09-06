@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 
 import { Separator } from "@/components/ui/separator";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/cn";
 
 import type { FieldType } from "../index";
@@ -73,17 +74,17 @@ const DraggableField = ({
   return (
     <div
       className={cn(
-        "group flex cursor-grab items-center gap-2.5 rounded-lg border border-transparent bg-transparent px-3 py-2 text-sm transition-all hover:border-border hover:bg-accent active:cursor-grabbing",
+        "group flex cursor-grab items-center gap-3 rounded-xl border border-transparent bg-transparent px-3 py-2 transition-all hover:border-border hover:bg-accent active:cursor-grabbing",
         isDragging && "scale-95 opacity-40",
       )}
       ref={ref}
     >
-      <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary/8 transition-colors group-hover:bg-primary/12">
-        {Icon && (
-          <Icon className="size-3.5 text-primary/70 transition-colors group-hover:text-primary" />
-        )}
-      </div>
-      <span className="text-[13px] font-medium text-foreground/80 transition-colors group-hover:text-foreground">
+      {Icon && (
+        <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 transition-colors group-hover:bg-primary/20">
+          <Icon className="size-4 text-primary/80 transition-colors group-hover:text-primary" />
+        </div>
+      )}
+      <span className="text-sm font-medium text-foreground/90 transition-colors group-hover:text-foreground">
         {label}
       </span>
       <GripVerticalIcon className="ml-auto size-3 text-muted-foreground/0 transition-colors group-hover:text-muted-foreground/40" />
@@ -112,11 +113,11 @@ const TappableField = ({
       }}
       type="button"
     >
-      <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 transition-colors group-active:bg-primary/20">
-        {Icon && (
+      {Icon && (
+        <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 transition-colors group-active:bg-primary/20">
           <Icon className="size-4 text-primary/80 transition-colors group-active:text-primary" />
-        )}
-      </div>
+        </div>
+      )}
       <span className="flex-1 text-sm font-medium text-foreground/90">
         {label}
       </span>
@@ -126,18 +127,16 @@ const TappableField = ({
 };
 
 export function FieldPalette({
-  fullWidth,
   onTapAdd,
 }: {
-  fullWidth?: boolean;
-  onTapAdd?: (type: FieldType) => void;
+  onTapAdd: (type: FieldType) => void;
 }) {
-  const isTapMode = fullWidth && onTapAdd;
+  const isMobile = useIsMobile();
 
   return (
     <div
       className={cn(
-        fullWidth ? "w-full" : "w-56",
+        isMobile ? "w-full" : "w-56",
         "flex h-full shrink-0 flex-col border-r border-border bg-background",
       )}
     >
@@ -145,18 +144,18 @@ export function FieldPalette({
         <h3 className="text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
           Components
         </h3>
-        {isTapMode && (
-          <p className="mt-1 text-[11px] text-muted-foreground/40">
+        {isMobile && (
+          <p className="mt-1 text-[11px] text-muted-foreground">
             Tap to add to canvas
           </p>
         )}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-2">
         <div
-          className={isTapMode ? "space-y-1.5 px-1 pb-4" : "space-y-0.5 pb-4"}
+          className={cn("pb-4", isMobile ? "space-y-1.5 px-1" : "space-y-0.5")}
         >
           {FIELD_TYPE_LIST.map((field) =>
-            isTapMode ? (
+            isMobile ? (
               <TappableField {...field} key={field.type} onTap={onTapAdd} />
             ) : (
               <DraggableField {...field} key={field.type} />
@@ -164,7 +163,7 @@ export function FieldPalette({
           )}
         </div>
       </div>
-      {!isTapMode && (
+      {!isMobile && (
         <>
           <Separator />
           <div className="flex items-center justify-center gap-2 p-3 text-muted-foreground">

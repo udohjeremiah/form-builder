@@ -2,15 +2,40 @@
 
 import { useCallback, useState } from "react";
 
-import type { RulesContextValue } from "../builder-context";
-import type { Rule } from "../index";
+import type {
+  AnyFieldDefinition,
+  BuilderDefinition,
+  RuleDefinition,
+} from "../index";
 
-import { useBuilder } from "../builder-context";
 import { addRule, newRule, removeRule, updateRule } from "./rule-definition";
 
-export function useRulesEditor(): RulesContextValue {
-  const { allFields, formState, setFormState } = useBuilder();
+export interface RulesEditorState {
+  allFields: AnyFieldDefinition[];
+  editingId: null | string;
+  editingRule: null | RuleDefinition;
+  handleChange: (rule: RuleDefinition) => void;
+  handleCreate: () => void;
+  handleDelete: (id: string) => void;
+  onBack: () => void;
+  openEditor: (id: string) => void;
+  rules: RuleDefinition[];
+}
 
+interface UseRulesEditorArguments {
+  allFields: AnyFieldDefinition[];
+  formState: BuilderDefinition;
+  setFormState: (
+    updater:
+      ((previous: BuilderDefinition) => BuilderDefinition) | BuilderDefinition,
+  ) => void;
+}
+
+export function useRulesEditor({
+  allFields,
+  formState,
+  setFormState,
+}: UseRulesEditorArguments): RulesEditorState {
   const [editingId, setEditingId] = useState<null | string>(null);
   const rules = formState.rules;
   const editingRule = rules.find((rule) => rule.id === editingId) ?? null;
@@ -25,7 +50,7 @@ export function useRulesEditor(): RulesContextValue {
   }, [setFormState]);
 
   const handleChange = useCallback(
-    (rule: Rule) => {
+    (rule: RuleDefinition) => {
       setFormState((previous) => ({
         ...previous,
         rules: updateRule(previous.rules, rule.id, rule),

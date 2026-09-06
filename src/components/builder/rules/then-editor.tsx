@@ -1,11 +1,18 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return */
 "use client";
 
+import { useField, useSelector } from "@tanstack/react-form";
 import { PlusIcon, XIcon } from "lucide-react";
 import { useMemo } from "react";
 
 import { Button } from "@/components/ui/button";
+import {
+  Field,
+  FieldContent,
+  FieldError,
+  FieldLabel,
+} from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -16,13 +23,14 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { generateColor } from "@/lib/generate-color";
 
-import type { RuleOutcome } from "../index";
+import type { Duration } from "../index";
 
 import {
   DURATION_UNIT_LABELS,
   DURATION_UNIT_LIST,
   RULE_STATUS_LABELS,
   RULE_STATUS_LIST,
+  type RuleFormHandle,
 } from "./rule-definition";
 
 const parseNumber = (raw: string): number | undefined => {
@@ -31,18 +39,15 @@ const parseNumber = (raw: string): number | undefined => {
   return Number.isNaN(parsed) ? undefined : parsed;
 };
 
-export function ThenEditor({
-  disabled,
-  onChange,
-  outcome,
-}: {
-  disabled?: boolean;
-  onChange: (outcome: RuleOutcome) => void;
-  outcome: RuleOutcome;
-}) {
-  // Hoisted so the nested spreads below narrow to a concrete Duration
-  // (nested property narrowing is lost inside the event callbacks).
-  const deadline = outcome.deadline;
+export function ThenEditor({ form }: { form: RuleFormHandle }) {
+  // Hoisted so the nested deadline renders below stay reactive to the
+  // outcome shape (deadline is conditionally present).
+  const outcome = useSelector(form.store, (state) => state.values.outcome);
+
+  const status = useField({ form, name: "outcome.status" });
+  const reason = useField({ form, name: "outcome.adminReason" });
+  const action = useField({ form, name: "outcome.studentAction" });
+
   const color = useMemo(() => generateColor("then"), []);
 
   return (
@@ -50,74 +55,78 @@ export function ThenEditor({
       className="border-s-4 bg-background/40 p-2"
       style={{ borderInlineStartColor: color }}
     >
-      <div className="space-y-1 pb-5">
-        <Label className="text-[11px] font-medium text-muted-foreground/70">
-          Status <span className="text-destructive">*</span>
-        </Label>
-        <Select
-          disabled={disabled}
-          onValueChange={(status) => {
-            if (status) onChange({ ...outcome, status });
-          }}
-          value={outcome.status}
-        >
-          <SelectTrigger className="h-8 w-full text-[13px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {RULE_STATUS_LIST.map((status) => (
-              <SelectItem className="text-[13px]" key={status} value={status}>
-                {RULE_STATUS_LABELS[status]}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      <Field className="pb-5">
+        <FieldLabel>Status</FieldLabel>
+        <FieldContent>
+          <Select
+            onValueChange={(value) => {
+              if (value) status.handleChange(value);
+            }}
+            value={status.state.value as string}
+          >
+            <SelectTrigger
+              className="h-8 w-full text-[13px]"
+              onBlur={status.handleBlur}
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {RULE_STATUS_LIST.map((value) => (
+                <SelectItem className="text-[13px]" key={value} value={value}>
+                  {RULE_STATUS_LABELS[value]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </FieldContent>
+      </Field>
 
-      <div className="space-y-1 pb-5">
-        <Label className="text-[11px] font-medium text-muted-foreground/70">
-          Admin reason <span className="text-destructive">*</span>
-        </Label>
-        <Textarea
-          className="max-h-40 resize-none overflow-y-auto text-xs"
-          disabled={disabled}
-          onChange={(event) => {
-            onChange({ ...outcome, adminReason: event.target.value });
-          }}
-          placeholder="Why this outcome applies..."
-          value={outcome.adminReason}
-        />
-      </div>
+      <Field
+        className="pb-5"
+        data-invalid={
+          (reason.state.meta.isTouched && !reason.state.meta.isValid) ||
+          undefined
+        }
+      >
+        <FieldLabel>Admin reason</FieldLabel>
+        <FieldContent>
+          <Textarea
+            className="max-h-40 resize-none overflow-y-auto text-xs"
+            onBlur={reason.handleBlur}
+            onChange={(event) => {
+              reason.handleChange(event.target.value);
+            }}
+            placeholder="Why this outcome applies..."
+            value={reason.state.value as string}
+          />
+          {reason.state.meta.isTouched && !reason.state.meta.isValid && (
+            <FieldError errors={reason.state.meta.errors} />
+          )}
+        </FieldContent>
+      </Field>
 
-      <div className="space-y-1 pb-5">
-        <Label className="text-[11px] font-medium text-muted-foreground/70">
-          Student action
-        </Label>
-        <Input
-          className="h-8 text-[13px]"
-          disabled={disabled}
-          onChange={(event) => {
-            onChange({
-              ...outcome,
-              studentAction:
+      <Field className="pb-5">
+        <FieldLabel>Student action</FieldLabel>
+        <FieldContent>
+          <Input
+            onChange={(event) => {
+              action.handleChange(
                 event.target.value === "" ? undefined : event.target.value,
-            });
-          }}
-          placeholder="What the student should do next..."
-          value={outcome.studentAction ?? ""}
-        />
-      </div>
+              );
+            }}
+            placeholder="What the student should do next..."
+            value={action.state.value as string}
+          />
+        </FieldContent>
+      </Field>
 
-      <div className="space-y-1 pb-5">
-        <div className="flex items-center justify-between">
-          <Label className="text-[11px] font-medium text-muted-foreground/70">
-            Deadline
-          </Label>
+      <Field className="pb-5">
+        <FieldLabel className="justify-between">
+          Deadline
           {outcome.deadline && (
             <Button
-              className="h-6 text-muted-foreground/50 hover:bg-destructive/10 hover:text-destructive"
               onClick={() => {
-                onChange({
+                form.setFieldValue("outcome", {
                   adminReason: outcome.adminReason,
                   status: outcome.status,
                   studentAction: outcome.studentAction,
@@ -125,67 +134,74 @@ export function ThenEditor({
               }}
               size="icon-xs"
               title="Remove deadline"
-              variant="ghost"
+              variant="destructive"
             >
               <XIcon className="size-3" />
             </Button>
           )}
-        </div>
-        {deadline ? (
-          <div className="flex gap-1.5">
-            <Input
-              className="h-8 w-20 text-[13px]"
-              min={0}
-              onChange={(event) => {
-                onChange({
-                  ...outcome,
-                  deadline: {
-                    ...deadline,
-                    amount: Math.max(0, parseNumber(event.target.value) ?? 0),
-                  },
+        </FieldLabel>
+        <FieldContent>
+          {outcome.deadline ? (
+            <DeadlineEditor form={form} />
+          ) : (
+            <Button
+              className="w-full border-dashed text-xs"
+              onClick={() => {
+                form.setFieldValue("outcome.deadline", {
+                  amount: 1,
+                  unit: "week",
                 });
               }}
-              placeholder="0"
-              type="number"
-              value={deadline.amount}
-            />
-            <Select
-              disabled={disabled}
-              onValueChange={(unit) => {
-                if (unit) {
-                  onChange({
-                    ...outcome,
-                    deadline: { ...deadline, unit },
-                  });
-                }
-              }}
-              value={deadline.unit}
+              size="xs"
+              variant="outline"
             >
-              <SelectTrigger className="h-8 flex-1 text-[13px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {DURATION_UNIT_LIST.map((unit) => (
-                  <SelectItem className="text-[13px]" key={unit} value={unit}>
-                    {DURATION_UNIT_LABELS[unit]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        ) : (
-          <Button
-            className="w-full border-dashed text-xs"
-            onClick={() => {
-              onChange({ ...outcome, deadline: { amount: 1, unit: "week" } });
-            }}
-            size="xs"
-            variant="outline"
-          >
-            <PlusIcon /> Add deadline
-          </Button>
-        )}
-      </div>
+              <PlusIcon /> Add deadline
+            </Button>
+          )}
+        </FieldContent>
+      </Field>
+    </div>
+  );
+}
+
+function DeadlineEditor({ form }: { form: RuleFormHandle }) {
+  const amount = useField({ form, name: "outcome.deadline.amount" });
+  const unit = useField({ form, name: "outcome.deadline.unit" });
+
+  return (
+    <div className="flex gap-1.5">
+      <Input
+        className="h-8 w-20 text-[13px]"
+        min={0}
+        onChange={(event) => {
+          amount.handleChange(
+            Math.max(0, parseNumber(event.target.value) ?? 0),
+          );
+        }}
+        placeholder="0"
+        type="number"
+        value={(amount.state.value as number | undefined) ?? 0}
+      />
+      <Select
+        onValueChange={(value) => {
+          if (value) unit.handleChange(value);
+        }}
+        value={unit.state.value as Duration["unit"]}
+      >
+        <SelectTrigger
+          className="h-8 flex-1 text-[13px]"
+          onBlur={unit.handleBlur}
+        >
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {DURATION_UNIT_LIST.map((value) => (
+            <SelectItem className="text-[13px]" key={value} value={value}>
+              {DURATION_UNIT_LABELS[value]}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </div>
   );
 }

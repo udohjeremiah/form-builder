@@ -1,3 +1,6 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
+"use client";
+
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 
 import type {
@@ -5,7 +8,10 @@ import type {
   SectionAttributes,
 } from "@/components/builder";
 
-import { isFieldDisabled } from "@/components/builder/form/form-definition";
+import {
+  type FormValue,
+  isFieldDisabled,
+} from "@/components/builder/form/form-definition";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -25,7 +31,24 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/cn";
 
-import { FieldInput } from "./field-input";
+import { CheckboxField } from "./field/checkbox";
+import { ColorField } from "./field/color";
+import { DateField } from "./field/date";
+import { DatetimeField } from "./field/datetime";
+import { EmailField } from "./field/email";
+import { FileField } from "./field/file";
+import { NumberField } from "./field/number";
+import { PasswordField } from "./field/password";
+import { RadioField } from "./field/radio";
+import { RatingField } from "./field/rating";
+import { SelectField } from "./field/select";
+import { SliderField } from "./field/slider";
+import { TelField } from "./field/tel";
+import { TextField } from "./field/text";
+import { TextareaField } from "./field/textarea";
+import { TimeField } from "./field/time";
+import { ToggleField } from "./field/toggle";
+import { UrlField } from "./field/url";
 
 export interface SectionGroup {
   attributes: SectionAttributes;
@@ -33,31 +56,25 @@ export interface SectionGroup {
   id: string;
 }
 
+// Set-type controls associate each option with its own label (checkbox and
+// radio rows, rating buttons), so the field-level label has no single target.
+const SET_FIELD_TYPES = new Set(["checkbox", "radio", "rating"]);
+
 interface SectionTabsProps {
   activeSection: number;
-  allFields: AnyFieldDefinition[];
-  errors: Record<string, null | string>;
+  fields: AnyFieldDefinition[];
+  form: any;
   groups: SectionGroup[];
   onActiveSection: (index: number) => void;
-  onBlur: (fieldId: string) => void;
-  onChange: (fieldId: string, value: string) => void;
-  onSubmitStep: () => void;
-  stepNextLabel: string;
-  touched: Record<string, boolean>;
-  values: Record<string, string>;
+  values: Record<string, FormValue>;
 }
 
 export function SectionTabs({
   activeSection,
-  allFields,
-  errors,
+  fields,
+  form,
   groups,
   onActiveSection,
-  onBlur,
-  onChange,
-  onSubmitStep,
-  stepNextLabel,
-  touched,
   values,
 }: SectionTabsProps) {
   const sectionCount = groups.length;
@@ -66,13 +83,14 @@ export function SectionTabs({
   const clamped = Math.min(Math.max(activeSection, 0), sectionCount - 1);
   const activeGroup = groups[clamped];
   if (!activeGroup) return null;
+
   const activeId = activeGroup.id;
 
   return (
     <div>
       <div className="mb-4 flex items-center justify-between">
-        <span className="font-mono text-xs text-muted-foreground">
-          SECTION {clamped + 1} of {sectionCount}
+        <span className="text-xs text-muted-foreground">
+          Section {clamped + 1} of {sectionCount}
         </span>
       </div>
 
@@ -85,7 +103,7 @@ export function SectionTabs({
         value={activeId}
       >
         <div className="scrollbar-none overflow-x-auto">
-          <div className="w-max space-y-2">
+          <div className="min-w-max space-y-2">
             <TabsList className="w-full gap-0 p-0" variant="line">
               {groups.map((group, index) => (
                 <TabsTrigger
@@ -113,10 +131,7 @@ export function SectionTabs({
 
         {groups.map((group, index) => (
           <TabsContent key={group.id} value={group.id}>
-            <div
-              className="animate-in space-y-5 duration-200 fade-in slide-in-from-right-4"
-              key={group.id}
-            >
+            <div className="space-y-5" key={group.id}>
               <Card>
                 {(group.attributes.title !== undefined ||
                   group.attributes.description !== undefined) && (
@@ -133,94 +148,92 @@ export function SectionTabs({
                 )}
                 <CardContent className="space-y-5">
                   {group.fields.map((field, fieldIndex) => {
-                    const fieldError = errors[field.id];
-                    const fieldTouched = touched[field.id];
                     const fieldDisabled = isFieldDisabled(
-                      field,
+                      fields,
                       values,
-                      allFields,
+                      field,
                     );
-                    const hasError = fieldTouched && !!fieldError;
 
                     return (
-                      <Field
-                        className={cn(
-                          "animate-in duration-300 fill-mode-both fade-in slide-in-from-bottom-2",
-                          fieldDisabled && "opacity-50",
-                        )}
-                        data-disabled={fieldDisabled || undefined}
-                        key={field.id}
-                        orientation="vertical"
-                        style={{ animationDelay: `${fieldIndex * 50}ms` }}
-                      >
-                        <FieldLabel>
-                          <span>{fieldIndex + 1}.</span>
-                          {field.attributes.label}
-                          {field.attributes.required && (
-                            <span className="text-destructive">*</span>
-                          )}
-                        </FieldLabel>
-                        <FieldContent>
-                          <FieldInput
-                            disabled={fieldDisabled}
-                            error={fieldError ?? null}
-                            field={field}
-                            onBlur={() => {
-                              onBlur(field.id);
-                            }}
-                            onChange={(value) => {
-                              onChange(field.id, value);
-                            }}
-                            touched={!!fieldTouched}
-                            value={values[field.id] ?? ""}
-                          />
-                          {field.attributes.description && (
-                            <FieldDescription>
-                              {field.attributes.description}
-                            </FieldDescription>
-                          )}
-                        </FieldContent>
-                        {hasError && (
-                          <FieldError>
-                            <span>{fieldError}</span>
-                          </FieldError>
-                        )}
-                      </Field>
+                      <form.Field key={field.id} name={field.id}>
+                        {(formField: any) => {
+                          const isInvalid =
+                            formField.state.meta.isTouched &&
+                            !formField.state.meta.isValid;
+
+                          return (
+                            <Field
+                              className={cn(fieldDisabled && "opacity-50")}
+                              data-disabled={fieldDisabled}
+                              data-invalid={isInvalid}
+                            >
+                              <FieldLabel
+                                htmlFor={
+                                  SET_FIELD_TYPES.has(field.type)
+                                    ? undefined
+                                    : formField.name
+                                }
+                              >
+                                <span>{fieldIndex + 1}.</span>
+                                {field.attributes.label}
+                                {field.attributes.required && (
+                                  <span className="text-destructive">*</span>
+                                )}
+                              </FieldLabel>
+                              <FieldContent>
+                                {renderField(formField, field)}
+                                {field.attributes.description && (
+                                  <FieldDescription>
+                                    {field.attributes.description}
+                                  </FieldDescription>
+                                )}
+                              </FieldContent>
+                              {isInvalid && (
+                                <FieldError
+                                  errors={formField.state.meta.errors}
+                                />
+                              )}
+                            </Field>
+                          );
+                        }}
+                      </form.Field>
                     );
                   })}
-                  <Separator className="my-5" />
-                  <div className="flex justify-between gap-3">
-                    {index > 0 && (
-                      <Button
-                        className="gap-1.5"
-                        onClick={() => {
-                          onActiveSection(index - 1);
-                        }}
-                        variant="outline"
+                  {sectionCount > 1 && (
+                    <>
+                      <Separator className="my-5" />
+                      <div
+                        className={cn(
+                          "flex items-center gap-3",
+                          index > 0 ? "justify-between" : "justify-end",
+                        )}
                       >
-                        <ChevronLeftIcon className="size-3.5" />
-                        Previous
-                      </Button>
-                    )}
-                    {index < sectionCount - 1 ? (
-                      <Button
-                        className="ml-auto gap-1.5"
-                        onClick={() => {
-                          onActiveSection(index + 1);
-                        }}
-                      >
-                        Next
-                        <ChevronRightIcon className="size-3.5" />
-                      </Button>
-                    ) : (
-                      <Button
-                        className="ml-auto gap-1.5"
-                        onClick={onSubmitStep}
-                      >
-                        {stepNextLabel}
-                      </Button>
-                    )}
-                  </div>
+                        {index > 0 && (
+                          <Button
+                            className="gap-1.5"
+                            onClick={() => {
+                              onActiveSection(index - 1);
+                            }}
+                            variant="outline"
+                          >
+                            <ChevronLeftIcon className="size-3.5" />
+                            Previous
+                          </Button>
+                        )}
+                        {index < sectionCount - 1 && (
+                          <Button
+                            className="gap-1.5"
+                            onClick={() => {
+                              onActiveSection(index + 1);
+                            }}
+                          >
+                            Next
+                            <ChevronRightIcon className="size-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                    </>
+                  )}
                 </CardContent>
               </Card>
             </div>
@@ -229,4 +242,68 @@ export function SectionTabs({
       </Tabs>
     </div>
   );
+}
+
+function renderField(field: any, definition: AnyFieldDefinition) {
+  const props = { definition, field };
+
+  switch (definition.type) {
+    case "checkbox": {
+      return <CheckboxField {...props} />;
+    }
+    case "color": {
+      return <ColorField {...props} />;
+    }
+    case "date": {
+      return <DateField {...props} />;
+    }
+    case "datetime": {
+      return <DatetimeField {...props} />;
+    }
+    case "email": {
+      return <EmailField {...props} />;
+    }
+    case "file": {
+      return <FileField {...props} />;
+    }
+    case "number": {
+      return <NumberField {...props} />;
+    }
+    case "password": {
+      return <PasswordField {...props} />;
+    }
+    case "radio": {
+      return <RadioField {...props} />;
+    }
+    case "rating": {
+      return <RatingField {...props} />;
+    }
+    case "select": {
+      return <SelectField {...props} />;
+    }
+    case "slider": {
+      return <SliderField {...props} />;
+    }
+    case "tel": {
+      return <TelField {...props} />;
+    }
+    case "text": {
+      return <TextField {...props} />;
+    }
+    case "textarea": {
+      return <TextareaField {...props} />;
+    }
+    case "time": {
+      return <TimeField {...props} />;
+    }
+    case "toggle": {
+      return <ToggleField {...props} />;
+    }
+    case "url": {
+      return <UrlField {...props} />;
+    }
+    default: {
+      return null;
+    }
+  }
 }

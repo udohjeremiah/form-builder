@@ -1,3 +1,5 @@
+import type { AnyFormApi } from "@tanstack/react-form";
+
 import type {
   ComparisonCondition,
   Condition,
@@ -5,12 +7,19 @@ import type {
   ExistsCondition,
   GroupCondition,
   ReviewCondition,
-  Rule,
+  RuleDefinition,
+  RuleOutcome,
   RuleStatus,
 } from "../index";
 
-// Random, position-independent identifiers: nothing encodes order or time,
-// so ids survive reordering and never collide across restored drafts.
+export type RuleFormHandle = AnyFormApi;
+
+export interface RuleFormValues {
+  area: string;
+  condition: GroupCondition;
+  outcome: RuleOutcome;
+}
+
 const ID_ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyz";
 
 const randomId = (prefix: string): string => {
@@ -21,8 +30,6 @@ const randomId = (prefix: string): string => {
   ).join("");
   return `${prefix}_${suffix}`;
 };
-
-const newRuleId = () => randomId("rule");
 
 export const newComparisonCondition = (field = ""): ComparisonCondition => ({
   field,
@@ -48,35 +55,30 @@ export const newGroupCondition = (): GroupCondition => ({
   type: "group",
 });
 
-/**
- * A fresh, blank rule with an empty WHEN tree and READY outcome.
- */
-export const newRule = (): Rule => ({
+export const newRule = (): RuleDefinition => ({
   area: "",
   condition: newGroupCondition(),
-  id: newRuleId(),
+  id: randomId("rule"),
   outcome: {
     adminReason: "",
     status: "READY",
   },
 });
 
-export const addRule = (rules: Rule[], rule: Rule): Rule[] => [...rules, rule];
+export const addRule = (rules: RuleDefinition[], rule: RuleDefinition) => [
+  ...rules,
+  rule,
+];
 
-export const removeRule = (rules: Rule[], id: string): Rule[] =>
+export const removeRule = (rules: RuleDefinition[], id: string) =>
   rules.filter((rule) => rule.id !== id);
 
 export const updateRule = (
-  rules: Rule[],
+  rules: RuleDefinition[],
   id: string,
-  patch: Partial<Rule>,
-): Rule[] =>
-  rules.map((rule) => (rule.id === id ? { ...rule, ...patch } : rule));
+  patch: Partial<RuleDefinition>,
+) => rules.map((rule) => (rule.id === id ? { ...rule, ...patch } : rule));
 
-/**
- * Copies the tree and replaces a single node located by `path` (an array of
- * child indexes from the root). Returns immutable copies on the way down.
- */
 export const updateCondition = (
   root: Condition,
   path: readonly number[],
@@ -95,10 +97,6 @@ export const updateCondition = (
   };
 };
 
-/**
- * Inserts `child` into `root` at the position named by `path` (the path to
- * the target group node), appending to that group's children.
- */
 export const appendCondition = (
   root: Condition,
   path: readonly number[],
@@ -120,9 +118,6 @@ export const appendCondition = (
   };
 };
 
-/**
- * Removes the child at `path` from its parent group.
- */
 export const removeCondition = (
   root: Condition,
   path: readonly number[],

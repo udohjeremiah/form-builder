@@ -1,9 +1,11 @@
 "use client";
 
+import { type AnyFieldApi, useField } from "@tanstack/react-form";
 import { XIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { FieldError } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -23,19 +25,24 @@ import type {
   ExistsCondition,
 } from "../index";
 
-import { getActiveOptions } from "../form/form-definition";
 import {
   CONDITION_OPERATOR_LABELS,
   getOperatorsForType,
   isMultiValueOperator,
   isPresenceOperator,
 } from "../operators";
-import { OptionsValueInput } from "../options-value-input";
 import {
   newComparisonCondition,
   newExistsCondition,
   newReviewCondition,
+  type RuleFormHandle,
 } from "./rule-definition";
+
+const arityOf = (operator: ConditionOperator): ValueArity => {
+  if (isPresenceOperator(operator)) return "none";
+  if (isMultiValueOperator(operator)) return "multi";
+  return "single";
+};
 
 const CONDITION_TYPES: { label: string; value: Condition["type"] }[] = [
   { label: "Comparison", value: "comparison" },
@@ -45,20 +52,18 @@ const CONDITION_TYPES: { label: string; value: Condition["type"] }[] = [
 
 type ValueArity = "multi" | "none" | "single";
 
-const arityOf = (operator: ConditionOperator): ValueArity => {
-  if (isPresenceOperator(operator)) return "none";
-  if (isMultiValueOperator(operator)) return "multi";
-  return "single";
-};
-
 export function ConditionRow({
   allFields,
   condition,
+  form,
+  nodeName,
   onChange,
   onRemove,
 }: {
   allFields: AnyFieldDefinition[];
   condition: Condition;
+  form: RuleFormHandle;
+  nodeName: string;
   onChange: (condition: Condition) => void;
   onRemove: () => void;
 }) {
@@ -84,7 +89,7 @@ export function ConditionRow({
           }}
           value={condition.type}
         >
-          <SelectTrigger className="h-7 min-w-0 flex-1 text-xs">
+          <SelectTrigger className="h-7 w-full text-xs md:min-w-0 md:flex-1">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -99,35 +104,28 @@ export function ConditionRow({
             ))}
           </SelectContent>
         </Select>
-
         {condition.type === "comparison" && (
           <ComparisonEditor
             allFields={allFields}
             condition={condition}
+            form={form}
+            nodeName={nodeName}
             onChange={onChange}
           />
         )}
-
         {condition.type === "exists" && (
           <ExistsEditor
             allFields={allFields}
             condition={condition}
+            form={form}
+            nodeName={nodeName}
             onChange={onChange}
           />
         )}
-
         {condition.type === "review" && (
-          <Input
-            className="h-7 min-w-0 flex-1 basis-40 text-xs"
-            onChange={(event) => {
-              onChange({ ...condition, note: event.target.value });
-            }}
-            placeholder="Review instruction..."
-            value={condition.note}
-          />
+          <ReviewNoteEditor form={form} nodeName={nodeName} />
         )}
       </div>
-
       <Button
         onClick={onRemove}
         size="icon-xs"
@@ -143,54 +141,74 @@ export function ConditionRow({
 function ComparisonEditor({
   allFields,
   condition,
+  form,
+  nodeName,
   onChange,
 }: {
   allFields: AnyFieldDefinition[];
   condition: ComparisonCondition;
+  form: RuleFormHandle;
+  nodeName: string;
   onChange: (condition: Condition) => void;
 }) {
-  const selectedField = allFields.find((field) => field.id === condition.field);
+  const field = useField({ form, name: `${nodeName}.field` });
+  const value = useField({ form, name: `${nodeName}.value` });
+
+  const selectedField = allFields.find((item) => item.id === condition.field);
   const fieldType = selectedField?.type ?? "text";
   const operators = getOperatorsForType(fieldType);
   const arity = arityOf(condition.operator);
 
   return (
     <>
-      <FieldSelect
-        allFields={allFields}
-        onChange={(field) => {
-          const next: ComparisonCondition = { ...condition, field };
-          const type = allFields.find((f) => f.id === field)?.type ?? "text";
-          const allowed = getOperatorsForType(type);
-          if (!allowed.includes(next.operator)) {
-            next.operator = allowed[0] ?? next.operator;
-            next.value = "";
-          }
-          onChange(next);
-        }}
-        value={condition.field}
-      />
+      <div className="w-full space-y-0.5 md:min-w-0 md:flex-1">
+        <FieldSelect
+          allFields={allFields}
+          onBlur={field.handleBlur}
+          onChange={(fieldId) => {
+            const next: ComparisonCondition = { ...condition, field: fieldId };
+            const type =
+              allFields.find((item) => item.id === fieldId)?.type ?? "text";
+            const allowed = getOperatorsForType(type);
+
+            if (!allowed.includes(next.operator)) {
+              next.operator = allowed[0] ?? next.operator;
+              next.value = "";
+            }
+
+            onChange(next);
+          }}
+          value={field.state.value as string}
+        />
+        {field.state.meta.isTouched && !field.state.meta.isValid && (
+          <FieldError errors={field.state.meta.errors} />
+        )}
+      </div>
+
       <Select
-        onValueChange={(operator) => {
-          if (!operator || operator === condition.operator) return;
+        onValueChange={(operatorValue) => {
+          if (!operatorValue || operatorValue === condition.operator) return;
+
           const next: ComparisonCondition = {
             ...condition,
-            operator,
+            operator: operatorValue,
           };
+
           if (arityOf(next.operator) !== arityOf(condition.operator)) {
             next.value = "";
           }
+
           onChange(next);
         }}
         value={condition.operator}
       >
-        <SelectTrigger className="h-7 flex-1 text-xs">
+        <SelectTrigger className="h-7 w-full text-xs md:flex-1">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          {operators.map((operator) => (
-            <SelectItem className="text-xs" key={operator} value={operator}>
-              {CONDITION_OPERATOR_LABELS[operator]}
+          {operators.map((item) => (
+            <SelectItem className="text-xs" key={item} value={item}>
+              {CONDITION_OPERATOR_LABELS[item]}
             </SelectItem>
           ))}
         </SelectContent>
@@ -199,8 +217,9 @@ function ComparisonEditor({
       <ComparisonValueInput
         arity={arity}
         condition={condition}
-        onChange={onChange}
-        options={selectedField ? getActiveOptions(selectedField) : []}
+        form={form}
+        nodeName={nodeName}
+        valueField={value}
       />
     </>
   );
@@ -209,104 +228,131 @@ function ComparisonEditor({
 function ComparisonValueInput({
   arity,
   condition,
-  onChange,
-  options,
+  form,
+  nodeName,
+  valueField,
 }: {
   arity: ValueArity;
   condition: ComparisonCondition;
-  onChange: (condition: Condition) => void;
-  options: string[];
+  form: RuleFormHandle;
+  nodeName: string;
+  valueField: AnyFieldApi;
 }) {
   if (arity === "none") return null;
 
-  const setValue = (value: string) => {
-    onChange({ ...condition, value });
-  };
-
-  if (options.length > 0) {
+  if (arity === "multi") {
     return (
-      <OptionsValueInput
-        onChange={setValue}
-        operator={condition.operator}
-        options={options}
-        value={condition.value}
+      <MultiValueTextarea
+        form={form}
+        key={`${condition.field}:${condition.operator}`}
+        name={`${nodeName}.value`}
       />
     );
   }
 
-  if (arity === "multi") {
-    return <MultiValueTextarea condition={condition} onChange={setValue} />;
-  }
-
   return (
-    <Input
-      className="h-7 min-w-0 flex-1 basis-40 font-mono text-xs"
-      onChange={(event) => {
-        setValue(event.target.value);
-      }}
-      placeholder="Expected value..."
-      value={condition.value}
-    />
+    <>
+      <Input
+        className="h-7 w-full font-mono text-xs md:min-w-0 md:flex-1 md:basis-40"
+        onBlur={valueField.handleBlur}
+        onChange={(event) => {
+          valueField.handleChange(event.target.value);
+        }}
+        placeholder="Expected value..."
+        value={valueField.state.value as string}
+      />
+      {valueField.state.meta.isTouched && !valueField.state.meta.isValid && (
+        <FieldError errors={valueField.state.meta.errors} />
+      )}
+    </>
   );
 }
 
 function ExistsEditor({
   allFields,
   condition,
+  form,
+  nodeName,
   onChange,
 }: {
   allFields: AnyFieldDefinition[];
   condition: ExistsCondition;
+  form: RuleFormHandle;
+  nodeName: string;
   onChange: (condition: Condition) => void;
 }) {
+  const field = useField({ form, name: `${nodeName}.field` });
+
   return (
     <>
-      <FieldSelect
-        allFields={allFields}
-        onChange={(field) => {
-          onChange({ ...condition, field });
-        }}
-        value={condition.field}
-      />
-      <Select
-        onValueChange={(present) => {
-          if (present) onChange({ ...condition, present: present === "true" });
-        }}
-        value={condition.present ? "true" : "false"}
-      >
-        <SelectTrigger className="h-7 min-w-0 flex-1 text-xs">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem className="text-xs" value="true">
-            Is answered
-          </SelectItem>
-          <SelectItem className="text-xs" value="false">
-            Is not answered
-          </SelectItem>
-        </SelectContent>
-      </Select>
+      <div className="w-full space-y-0.5 md:min-w-0 md:flex-1">
+        <FieldSelect
+          allFields={allFields}
+          onBlur={field.handleBlur}
+          onChange={(fieldId) => {
+            onChange({ ...condition, field: fieldId });
+          }}
+          value={field.state.value as string}
+        />
+        {field.state.meta.isTouched && !field.state.meta.isValid && (
+          <FieldError errors={field.state.meta.errors} />
+        )}
+      </div>
+      <ExistsPresentEditor form={form} nodeName={nodeName} />
     </>
+  );
+}
+
+function ExistsPresentEditor({
+  form,
+  nodeName,
+}: {
+  form: RuleFormHandle;
+  nodeName: string;
+}) {
+  const present = useField({ form, name: `${nodeName}.present` });
+
+  return (
+    <Select
+      onValueChange={(value) => {
+        if (value) present.handleChange(value === "true");
+      }}
+      value={present.state.value === true ? "true" : "false"}
+    >
+      <SelectTrigger className="h-7 w-full text-xs md:min-w-0 md:flex-1">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem className="text-xs" value="true">
+          Is answered
+        </SelectItem>
+        <SelectItem className="text-xs" value="false">
+          Is not answered
+        </SelectItem>
+      </SelectContent>
+    </Select>
   );
 }
 
 function FieldSelect({
   allFields,
+  onBlur,
   onChange,
   value,
 }: {
   allFields: AnyFieldDefinition[];
+  onBlur: () => void;
   onChange: (fieldId: string) => void;
-  value: string;
+  value: string | undefined;
 }) {
   return (
     <Select
       onValueChange={(fieldId) => {
         if (fieldId) onChange(fieldId);
       }}
-      value={value}
+      value={value ?? ""}
     >
-      <SelectTrigger className="h-7 min-w-0 flex-1 text-xs">
+      <SelectTrigger className="h-7 w-full text-xs" onBlur={onBlur}>
         <SelectValue placeholder="Select a field..." />
       </SelectTrigger>
       <SelectContent>
@@ -321,37 +367,65 @@ function FieldSelect({
 }
 
 function MultiValueTextarea({
-  condition,
-  onChange,
+  form,
+  name,
 }: {
-  condition: ComparisonCondition;
-  onChange: (value: string) => void;
+  form: RuleFormHandle;
+  name: string;
 }) {
   // Commit on blur rather than every keystroke: committing live strips the
   // trailing blank line just created with Enter (the model drops empty lines),
   // so a new line would vanish. The draft keeps the raw text locally and the
   // cleaned list is committed on blur. Re-mounting per field+operator reseeds
   // it when the referenced field or operator changes.
-  const [draft, setDraft] = useState(() => condition.value);
-  const reseedKey = `${condition.field}:${condition.operator}`;
+  const field = useField({ form, name });
+  const [draft, setDraft] = useState(() =>
+    typeof field.state.value === "string" ? field.state.value : "",
+  );
 
   return (
-    <Textarea
-      className="max-h-32 basis-full resize-none overflow-y-auto font-mono text-xs"
-      key={reseedKey}
-      onBlur={() => {
-        onChange(
-          draft
-            .split("\n")
-            .filter((line) => line.trim().length > 0)
-            .join("\n"),
-        );
-      }}
+    <div className="w-full basis-full space-y-0.5">
+      <Textarea
+        className="max-h-32 w-full basis-full resize-none overflow-y-auto font-mono text-xs"
+        onBlur={() => {
+          field.handleChange(
+            draft
+              .split("\n")
+              .filter((line) => line.trim().length > 0)
+              .join("\n"),
+          );
+          field.handleBlur();
+        }}
+        onChange={(event) => {
+          setDraft(event.target.value);
+        }}
+        placeholder="Enter each expected value on its own line..."
+        value={draft}
+      />
+      {field.state.meta.isTouched && !field.state.meta.isValid && (
+        <FieldError errors={field.state.meta.errors} />
+      )}
+    </div>
+  );
+}
+
+function ReviewNoteEditor({
+  form,
+  nodeName,
+}: {
+  form: RuleFormHandle;
+  nodeName: string;
+}) {
+  const note = useField({ form, name: `${nodeName}.note` });
+
+  return (
+    <Input
+      className="h-7 w-full text-xs md:min-w-0 md:flex-1 md:basis-40"
       onChange={(event) => {
-        setDraft(event.target.value);
+        note.handleChange(event.target.value);
       }}
-      placeholder="Enter each expected value on its own line..."
-      value={draft}
+      placeholder="Review instruction..."
+      value={note.state.value as string}
     />
   );
 }

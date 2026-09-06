@@ -1,31 +1,32 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
+import type { FieldComponentProps } from "@/components/builder/form/form-definition";
+
 import { Textarea } from "@/components/ui/textarea";
 
-import { type FieldInputPropsFor, useErrorClass } from "../types";
-
-export function TextareaField({
-  disabled,
-  error,
-  field,
-  onBlur,
-  onChange,
-  touched,
-  value,
-}: FieldInputPropsFor<"textarea">) {
-  const { maxLength, minLength, placeholder } = field.attributes;
+export function TextareaField({ definition, field }: FieldComponentProps) {
+  const attributes = definition.attributes as {
+    autoComplete?: string;
+    maxLength?: number;
+    minLength?: number;
+    placeholder?: string;
+  };
+  const { maxLength, minLength, placeholder } = attributes;
+  const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid;
 
   return (
     <Textarea
-      autoComplete={field.attributes.autoComplete}
-      className={useErrorClass(touched, error)}
-      disabled={disabled}
+      aria-invalid={isInvalid ?? undefined}
+      autoComplete={attributes.autoComplete}
+      id={field.name}
       maxLength={maxLength}
       minLength={minLength}
-      onBlur={onBlur}
+      name={field.name}
+      onBlur={field.handleBlur}
       onChange={(event) => {
-        onChange(event.target.value);
+        field.handleChange(event.target.value);
       }}
       placeholder={placeholder}
-      value={value}
+      value={field.state.value}
     />
   );
 }

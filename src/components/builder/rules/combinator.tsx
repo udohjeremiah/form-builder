@@ -15,20 +15,18 @@ const MATCH_OPTIONS: Record<GroupCondition["operator"], string> = {
   or: "Any condition",
 };
 
-/**
- * A labeled MATCH select at a group's connector junction. The stored value is
- * the lowercase `and`/`or`; the dropdown reads "All conditions"/"Any condition".
- */
 export function Combinator({
+  onBlur,
   onChange,
   operator,
 }: {
+  onBlur: () => void;
   onChange: (operator: GroupCondition["operator"]) => void;
   operator: GroupCondition["operator"];
 }) {
   return (
     <div>
-      <span className="mb-1 block text-[11px] tracking-widest text-muted-foreground/70">
+      <span className="mb-1 block text-[11px] tracking-widest text-muted-foreground">
         Match
       </span>
       <Select
@@ -37,7 +35,7 @@ export function Combinator({
         }}
         value={operator}
       >
-        <SelectTrigger className="h-7 text-xs">
+        <SelectTrigger className="h-7 text-xs" onBlur={onBlur}>
           <SelectValue>{operator}</SelectValue>
         </SelectTrigger>
         <SelectContent>

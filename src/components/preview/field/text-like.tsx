@@ -1,46 +1,43 @@
-import type { FieldDefinition } from "@/components/builder";
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
+import type { AnyFieldDefinition, FieldDefinition } from "@/components/builder";
 
 import { Input } from "@/components/ui/input";
 
-import { type FieldInputProps, useErrorClass } from "../types";
-
-interface TextLikeFieldProps extends FieldInputProps<
-  FieldDefinition<TextLikeType>
-> {
+interface TextLikeFieldProps {
+  definition: AnyFieldDefinition;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  field: any;
   type: TextLikeType;
 }
 
 type TextLikeType = "email" | "password" | "tel" | "text" | "url";
 
-export function TextLikeField({
-  disabled,
-  error,
-  field,
-  onBlur,
-  onChange,
-  touched,
-  type,
-  value,
-}: TextLikeFieldProps) {
-  const { autoComplete, maxLength, minLength, placeholder } = field.attributes;
-  const pattern =
-    "pattern" in field.attributes ? field.attributes.pattern : undefined;
+export function TextLikeField({ definition, field, type }: TextLikeFieldProps) {
+  const attributes =
+    definition.attributes as FieldDefinition<TextLikeType>["attributes"];
+  const { autoComplete, maxLength, minLength, placeholder } = attributes;
+  const pattern = "pattern" in attributes ? attributes.pattern : undefined;
+  const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid;
 
   return (
     <Input
+      aria-invalid={isInvalid ?? undefined}
       autoComplete={autoComplete}
-      className={useErrorClass(touched, error)}
-      disabled={disabled}
+      disabled={
+        field.state.meta.isTouched && field.state.meta.errors.length > 0
+      }
+      id={field.name}
       maxLength={maxLength}
       minLength={minLength}
-      onBlur={onBlur}
+      name={field.name}
+      onBlur={field.handleBlur}
       onChange={(event) => {
-        onChange(event.target.value);
+        field.handleChange(event.target.value);
       }}
       pattern={pattern}
       placeholder={placeholder}
       type={type}
-      value={value}
+      value={field.state.value}
     />
   );
 }

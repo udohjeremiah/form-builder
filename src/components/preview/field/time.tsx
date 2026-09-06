@@ -1,28 +1,28 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
+import type { FieldComponentProps } from "@/components/builder/form/form-definition";
+
 import { Input } from "@/components/ui/input";
 
-import { type FieldInputPropsFor, useErrorClass } from "../types";
+export function TimeField({ definition, field }: FieldComponentProps) {
+  const attributes = definition.attributes as {
+    maxDate?: string;
+    minDate?: string;
+  };
+  const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid;
 
-export function TimeField({
-  disabled,
-  error,
-  field,
-  onBlur,
-  onChange,
-  touched,
-  value,
-}: FieldInputPropsFor<"time">) {
   return (
     <Input
-      className={useErrorClass(touched, error)}
-      disabled={disabled}
-      max={field.attributes.maxDate}
-      min={field.attributes.minDate}
-      onBlur={onBlur}
+      aria-invalid={isInvalid ?? undefined}
+      id={field.name}
+      max={attributes.maxDate}
+      min={attributes.minDate}
+      name={field.name}
+      onBlur={field.handleBlur}
       onChange={(event) => {
-        onChange(event.target.value);
+        field.handleChange(event.target.value);
       }}
       type="time"
-      value={value}
+      value={field.state.value}
     />
   );
 }

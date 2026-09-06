@@ -1,26 +1,22 @@
-import { getActiveOptions } from "@/components/builder/form/form-definition";
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
+import {
+  type FieldComponentProps,
+  getActiveOptions,
+} from "@/components/builder/form/form-definition";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/cn";
 
-import type { FieldInputProps } from "../types";
-
-export function CheckboxField({
-  disabled,
-  field,
-  onBlur,
-  onChange,
-  value,
-}: FieldInputProps) {
-  const options = getActiveOptions(field).filter(Boolean);
+export function CheckboxField({ definition, field }: FieldComponentProps) {
+  const options = getActiveOptions(definition).filter(Boolean);
   const choices = options.length > 0 ? options : ["Option 1", "Option 2"];
-  const selected = value.split(",").filter(Boolean);
+  const selected = field.state.value.split(",").filter(Boolean);
   const toggle = (option: string) => {
     const next = selected.includes(option)
-      ? selected.filter((item) => item !== option)
+      ? selected.filter((item: string) => item !== option)
       : [...selected, option];
-    onChange(next.join(","));
-    onBlur();
+    field.handleChange(next.join(","));
+    field.handleBlur();
   };
 
   return (
@@ -33,15 +29,13 @@ export function CheckboxField({
               "flex cursor-pointer items-center gap-3 rounded-lg border p-3 transition-colors",
               "has-data-checked:border-primary has-data-checked:bg-primary/5",
               "hover:bg-accent/50",
-              disabled && "cursor-default opacity-60",
             )}
-            htmlFor={`${field.id}-${option}`}
+            htmlFor={`${definition.id}-${option}`}
             key={option}
           >
             <Checkbox
               checked={checked}
-              disabled={disabled}
-              id={`${field.id}-${option}`}
+              id={`${definition.id}-${option}`}
               onCheckedChange={() => {
                 toggle(option);
               }}

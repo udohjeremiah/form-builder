@@ -1,21 +1,29 @@
 import type {
   AnyFieldDefinition,
+  BuilderDefinition,
   Condition,
   ConditionGroup,
+  FieldLogic,
   FieldRule,
   FieldType,
-  FormDefinition,
-  Rule,
+  RuleDefinition,
   SectionAttributes,
   SectionDefinition,
   StepAttributes,
   StepDefinition,
 } from "../index";
 
+import { buildDefinitionSchema } from "../schema";
 import { getFieldEntry } from "./field-registry";
 
-// Random, position-independent identifiers: nothing encodes order or time,
-// so ids survive reordering and never collide across restored drafts.
+export interface FieldComponentProps {
+  definition: AnyFieldDefinition;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  field: any;
+}
+
+export type FormValue = File | File[] | string;
+
 const ID_ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyz";
 
 const randomId = (prefix: string): string => {
@@ -27,10 +35,6 @@ const randomId = (prefix: string): string => {
   return `${prefix}_${suffix}`;
 };
 
-const newFieldId = () => randomId("fld");
-const newSectionId = () => randomId("sec");
-const newStepId = () => randomId("st");
-
 const STEP_DESCRIPTION = "Add a description for this step";
 const SECTION_DESCRIPTION = "Add a description for this section";
 
@@ -41,16 +45,22 @@ const createSection = (
 ): SectionDefinition => ({
   attributes: { description, title },
   fields,
-  id: newSectionId(),
+  id: randomId("sec"),
 });
 
 const createStepDefinition = (
   title: string,
   description: string,
 ): StepDefinition => {
-  const id = newStepId();
+  const id = randomId("st");
   return {
-    attributes: { description, title },
+    attributes: {
+      description,
+      nextLabel: "Next",
+      previousLabel: "Back",
+      submitLabel: "Submit",
+      title,
+    },
     id,
     sections: [createSection("Section 1", SECTION_DESCRIPTION)],
   };
@@ -65,30 +75,26 @@ export const newField = (type: FieldType): AnyFieldDefinition => {
       placeholder: `Enter ${entry.label.toLowerCase()}...`,
       required: true,
     },
-    id: newFieldId(),
+    id: randomId("fld"),
     logic: {},
     type,
   };
 };
 
-export const getAllFields = (
-  definition: FormDefinition,
-): AnyFieldDefinition[] =>
-  definition.steps.flatMap((step) =>
-    step.sections.flatMap((section) => section.fields),
-  );
+export const getFields = (steps: StepDefinition[]): AnyFieldDefinition[] =>
+  steps.flatMap((step) => step.sections.flatMap((section) => section.fields));
 
 export const getField = (
-  definition: FormDefinition,
+  definition: BuilderDefinition,
   id: string,
 ): AnyFieldDefinition | null =>
-  getAllFields(definition).find((field) => field.id === id) ?? null;
+  getFields(definition.steps).find((field) => field.id === id) ?? null;
 
 export const updateField = (
-  definition: FormDefinition,
+  definition: BuilderDefinition,
   id: string,
   updater: (field: AnyFieldDefinition) => AnyFieldDefinition,
-): FormDefinition => ({
+): BuilderDefinition => ({
   ...definition,
   steps: definition.steps.map((step) => ({
     ...step,
@@ -102,9 +108,9 @@ export const updateField = (
 });
 
 export const removeField = (
-  definition: FormDefinition,
+  definition: BuilderDefinition,
   id: string,
-): FormDefinition => ({
+): BuilderDefinition => ({
   ...definition,
   steps: definition.steps.map((step) => ({
     ...step,
@@ -116,9 +122,9 @@ export const removeField = (
 });
 
 export const duplicateField = (
-  definition: FormDefinition,
+  definition: BuilderDefinition,
   id: string,
-): FormDefinition => ({
+): BuilderDefinition => ({
   ...definition,
   steps: definition.steps.map((step) => ({
     ...step,
@@ -133,7 +139,7 @@ export const duplicateField = (
           ...source.attributes,
           label: `${source.attributes.label} (copy)`,
         },
-        id: newFieldId(),
+        id: randomId("fld"),
       };
       const next = [...section.fields];
       next.splice(index + 1, 0, clone);
@@ -143,12 +149,10 @@ export const duplicateField = (
 });
 
 export const appendField = (
-  definition: FormDefinition,
+  definition: BuilderDefinition,
   stepIndex: number,
   field: AnyFieldDefinition,
-): FormDefinition => {
-  // A blank form has no steps; the first added field creates Step 1 with a
-  // single section so the drop/tap always lands somewhere.
+): BuilderDefinition => {
   if (definition.steps.length === 0) {
     const step = createStepDefinition("Step 1", STEP_DESCRIPTION);
     step.sections = [createSection("Section 1", SECTION_DESCRIPTION, [field])];
@@ -159,12 +163,14 @@ export const appendField = (
     ...definition,
     steps: definition.steps.map((step, index) => {
       if (index !== stepIndex) return step;
+
       if (step.sections.length === 0) {
         return {
           ...step,
           sections: [createSection("Section 1", SECTION_DESCRIPTION, [field])],
         };
       }
+
       return {
         ...step,
         sections: step.sections.map((section, sectionIndex) =>
@@ -177,18 +183,14 @@ export const appendField = (
   };
 };
 
-/**
- * Moves a field so that it takes the global position previously occupied by
- * `toId`, shifting everything in between across step and section boundaries.
- */
 export const moveField = (
-  definition: FormDefinition,
+  definition: BuilderDefinition,
   fromId: string,
   toId: string,
-): FormDefinition => {
+): BuilderDefinition => {
   if (fromId === toId) return definition;
 
-  const flat = getAllFields(definition);
+  const flat = getFields(definition.steps);
   const fromIndex = flat.findIndex((field) => field.id === fromId);
   const toIndex = flat.findIndex((field) => field.id === toId);
 
@@ -201,8 +203,10 @@ export const moveField = (
   const ordered = [...flat];
   const [moved] = ordered.splice(fromIndex, 1);
   if (!moved) return definition;
+
   ordered.splice(toIndex, 0, moved);
   let cursor = 0;
+
   return {
     ...definition,
     steps: definition.steps.map((step) => ({
@@ -216,15 +220,12 @@ export const moveField = (
   };
 };
 
-/** Reorders a field within a single section by local (section-relative)
- * indexes. Used for intra-section sortable drops where dnd-kit's live index
- * matches the optimistic visual order. */
 export const moveFieldWithinSection = (
-  definition: FormDefinition,
+  definition: BuilderDefinition,
   sectionId: string,
   fromIndex: number,
   toIndex: number,
-): FormDefinition => {
+): BuilderDefinition => {
   if (fromIndex === toIndex) return definition;
 
   return {
@@ -233,6 +234,7 @@ export const moveFieldWithinSection = (
       ...step,
       sections: step.sections.map((section) => {
         if (section.id !== sectionId) return section;
+
         const ordered = [...section.fields];
         const [moved] = ordered.splice(fromIndex, 1);
         if (moved) ordered.splice(toIndex, 0, moved);
@@ -242,12 +244,11 @@ export const moveFieldWithinSection = (
   };
 };
 
-/** Appends a field to the end of a specific section identified by id. */
 export const appendFieldToSection = (
-  definition: FormDefinition,
+  definition: BuilderDefinition,
   sectionId: string,
   field: AnyFieldDefinition,
-): FormDefinition => ({
+): BuilderDefinition => ({
   ...definition,
   steps: definition.steps.map((step) => ({
     ...step,
@@ -259,17 +260,12 @@ export const appendFieldToSection = (
   })),
 });
 
-/**
- * Moves a field out of its current section and appends it to the end of the
- * target section. Used when a drag ends on a section body rather than on
- * another field.
- */
 export const moveFieldIntoSection = (
-  definition: FormDefinition,
+  definition: BuilderDefinition,
   fieldId: string,
   sectionId: string,
-): FormDefinition => {
-  const flat = getAllFields(definition);
+): BuilderDefinition => {
+  const flat = getFields(definition.steps);
 
   const moved = flat.find((field) => field.id === fieldId);
   if (!moved) return definition;
@@ -296,7 +292,7 @@ export const moveFieldIntoSection = (
   };
 };
 
-export const addStep = (definition: FormDefinition): FormDefinition => ({
+export const addStep = (definition: BuilderDefinition): BuilderDefinition => ({
   ...definition,
   steps: [
     ...definition.steps,
@@ -308,9 +304,9 @@ export const addStep = (definition: FormDefinition): FormDefinition => ({
 });
 
 export const addSection = (
-  definition: FormDefinition,
+  definition: BuilderDefinition,
   stepIndex: number,
-): FormDefinition => ({
+): BuilderDefinition => ({
   ...definition,
   steps: definition.steps.map((step, index) =>
     index === stepIndex
@@ -329,9 +325,9 @@ export const addSection = (
 });
 
 export const removeSection = (
-  definition: FormDefinition,
+  definition: BuilderDefinition,
   id: string,
-): FormDefinition => ({
+): BuilderDefinition => ({
   ...definition,
   steps: definition.steps.map((step) => ({
     ...step,
@@ -339,12 +335,11 @@ export const removeSection = (
   })),
 });
 
-/** Patches the attributes of a step identified by id. */
 export const updateStepAttributes = (
-  definition: FormDefinition,
+  definition: BuilderDefinition,
   stepId: string,
   patch: Partial<StepAttributes>,
-): FormDefinition => ({
+): BuilderDefinition => ({
   ...definition,
   steps: definition.steps.map((step) =>
     step.id === stepId
@@ -353,12 +348,11 @@ export const updateStepAttributes = (
   ),
 });
 
-/** Patches the title/description attributes of a section identified by id. */
 export const updateSectionAttributes = (
-  definition: FormDefinition,
+  definition: BuilderDefinition,
   sectionId: string,
   patch: Partial<SectionAttributes>,
-): FormDefinition => ({
+): BuilderDefinition => ({
   ...definition,
   steps: definition.steps.map((step) => ({
     ...step,
@@ -371,19 +365,18 @@ export const updateSectionAttributes = (
 });
 
 export const removeStep = (
-  definition: FormDefinition,
+  definition: BuilderDefinition,
   index: number,
-): FormDefinition => ({
+): BuilderDefinition => ({
   ...definition,
   steps: definition.steps.filter((_, stepIndex) => stepIndex !== index),
 });
 
-/** Moves a step to a new position within the form. */
 export const moveStep = (
-  definition: FormDefinition,
+  definition: BuilderDefinition,
   fromIndex: number,
   toIndex: number,
-): FormDefinition => {
+): BuilderDefinition => {
   if (
     fromIndex === toIndex ||
     fromIndex < 0 ||
@@ -393,20 +386,21 @@ export const moveStep = (
   ) {
     return definition;
   }
+
   const steps = [...definition.steps];
   const [moved] = steps.splice(fromIndex, 1);
   if (!moved) return definition;
+
   steps.splice(toIndex, 0, moved);
   return { ...definition, steps };
 };
 
-/** Moves a section to a new position within one step of the form. */
 export const moveSection = (
-  definition: FormDefinition,
+  definition: BuilderDefinition,
   stepIndex: number,
   fromIndex: number,
   toIndex: number,
-): FormDefinition => ({
+): BuilderDefinition => ({
   ...definition,
   steps: definition.steps.map((step, index) => {
     if (
@@ -419,70 +413,60 @@ export const moveSection = (
     ) {
       return step;
     }
+
     const sections = [...step.sections];
     const [moved] = sections.splice(fromIndex, 1);
     if (!moved) return step;
+
     sections.splice(toIndex, 0, moved);
     return { ...step, sections };
   }),
 });
 
-// Magnitude comparisons work numerically when both sides are numbers and
-// lexicographically otherwise, which also covers ISO date strings.
-const asNumber = (raw: string): null | number => {
+const asNumber = (raw: string) => {
   if (!raw.trim()) return null;
   const parsed = Number(raw);
   return Number.isFinite(parsed) ? parsed : null;
 };
 
-const compareValues = (left: string, right: string): number => {
+const compareValues = (left: string, right: string) => {
   const leftNumber = asNumber(left);
   const rightNumber = asNumber(right);
+
   if (leftNumber !== null && rightNumber !== null) {
     if (leftNumber === rightNumber) return 0;
     return leftNumber < rightNumber ? -1 : 1;
   }
+
   if (left === right) return 0;
+
   return left < right ? -1 : 1;
 };
 
-/**
- * Resolves the options that should be shown for an options-bearing field.
- */
-export function getActiveOptions(field: AnyFieldDefinition): string[] {
-  if (
-    field.type !== "checkbox" &&
-    field.type !== "radio" &&
-    field.type !== "select"
-  )
-    return [];
-  return field.attributes.options ?? [];
+export function getActiveOptions(field: AnyFieldDefinition) {
+  return "options" in field.attributes ? (field.attributes.options ?? []) : [];
 }
 
 export function isFieldDisabled(
-  field: AnyFieldDefinition,
-  values: Record<string, string>,
   allFields: AnyFieldDefinition[],
-): boolean {
+  values: Record<string, FormValue>,
+  field: AnyFieldDefinition,
+) {
   const { disable } = field.logic;
   return disable ? evaluateGroup(disable, values, allFields) : false;
 }
 
 export function isFieldVisible(
-  field: AnyFieldDefinition,
-  values: Record<string, string>,
   allFields: AnyFieldDefinition[],
-): boolean {
+  values: Record<string, FormValue>,
+  field: AnyFieldDefinition,
+) {
   const { hide, show } = field.logic;
   if (show && !evaluateGroup(show, values, allFields)) return false;
   if (hide && evaluateGroup(hide, values, allFields)) return false;
   return true;
 }
 
-/**
- * Splits a checkbox field's comma-joined selection into the set of checked
- * options, ignoring empty entries.
- */
 function checkedOptions(value: string): string[] {
   return value
     .split(",")
@@ -492,13 +476,15 @@ function checkedOptions(value: string): string[] {
 
 function evaluateGroup(
   group: ConditionGroup,
-  values: Record<string, string>,
+  values: Record<string, FormValue>,
   allFields: AnyFieldDefinition[],
-): boolean {
+) {
   if (group.rules.length === 0) return true;
+
   // A row without a target field cannot constrain anything.
   const passes = (rule: FieldRule) =>
     !rule.fieldId || evaluateRule(rule, values, allFields);
+
   return group.combinator === "or"
     ? group.rules.some((rule) => passes(rule))
     : group.rules.every((rule) => passes(rule));
@@ -506,13 +492,15 @@ function evaluateGroup(
 
 function evaluateRule(
   rule: FieldRule,
-  values: Record<string, string>,
+  values: Record<string, FormValue>,
   allFields: AnyFieldDefinition[],
-): boolean {
-  const value = values[rule.fieldId] ?? "";
+) {
+  const raw = values[rule.fieldId] ?? "";
+  const value = typeof raw === "string" ? raw : "";
   const expected = rule.value ?? "";
   const isCheckbox =
     allFields.find((field) => field.id === rule.fieldId)?.type === "checkbox";
+
   switch (rule.operator) {
     case "contains": {
       return value.includes(expected);
@@ -561,17 +549,10 @@ function evaluateRule(
   }
 }
 
-/**
- * Whether two sets share at least one member.
- */
 function intersects(left: string[], right: string[]): boolean {
   return left.some((item) => right.includes(item));
 }
 
-/**
- * Whether `candidate` is contained in a newline-separated list of expected
- * values, ignoring empty lines (used by the `in` / `not_in` operators).
- */
 function listIncludes(list: string, candidate: string): boolean {
   return list
     .split("\n")
@@ -580,10 +561,6 @@ function listIncludes(list: string, candidate: string): boolean {
     .includes(candidate.trim());
 }
 
-/**
- * Splits a condition's newline-joined expected values into a set, ignoring
- * empty lines (used by checkbox `in` / `not_in` membership checks).
- */
 function listValues(list: string): string[] {
   return list
     .split("\n")
@@ -591,108 +568,93 @@ function listValues(list: string): string[] {
     .filter((item) => item.length > 0);
 }
 
-/**
- * Whether two sets hold exactly the same members, regardless of order.
- */
 function setsEqual(left: string[], right: string[]): boolean {
   if (left.length !== right.length) return false;
   return left.every((item) => right.includes(item));
 }
 
-const EMAIL_FORMAT = /^[^\s@]+@[^\s@][^\s.@]*\.[^\s@]+$/;
+const referencesValidField = (target: string, fieldIds: ReadonlySet<string>) =>
+  target === "" || fieldIds.has(target);
 
-export function validateFieldValue(
-  field: AnyFieldDefinition,
-  value: string,
-): null | string {
-  const { attributes } = field;
-  if (attributes.required && !value.trim()) {
-    return `${attributes.label} is required`;
-  }
-  if (!value && !attributes.required) return null;
-  switch (field.type) {
-    case "email":
-    case "password":
-    case "tel":
-    case "text":
-    case "textarea":
-    case "url": {
-      const { maxLength, minLength } = field.attributes;
-      if (minLength !== undefined && value.length < minLength) {
-        return `Minimum ${minLength} characters`;
-      }
-      if (maxLength !== undefined && value.length > maxLength) {
-        return `Maximum ${maxLength} characters`;
-      }
-      if ("pattern" in field.attributes && field.attributes.pattern) {
-        try {
-          // eslint-disable-next-line security/detect-non-literal-regexp -- pattern is a user-defined attribute
-          if (!new RegExp(field.attributes.pattern).test(value)) {
-            return "Invalid format";
-          }
-        } catch {
-          break;
+export const normalizeDefinition = (
+  definition: BuilderDefinition,
+): BuilderDefinition => {
+  const fieldIds = new Set(
+    getFields(definition.steps).map((field) => field.id),
+  );
+
+  const pruneRuleGroup = (group: ConditionGroup): ConditionGroup => ({
+    ...group,
+    rules: group.rules.filter((rule) =>
+      referencesValidField(rule.fieldId, fieldIds),
+    ),
+  });
+
+  const pruneLogic = (logic: FieldLogic): FieldLogic => {
+    const next: FieldLogic = {};
+    for (const key of ["disable", "hide", "show"] as const) {
+      const group = logic[key];
+      if (group) next[key] = pruneRuleGroup(group);
+    }
+    return next;
+  };
+
+  const pruneRuleConditions = (conditions: Condition[]): Condition[] =>
+    conditions.flatMap((condition): Condition[] => {
+      switch (condition.type) {
+        case "comparison":
+        case "exists": {
+          return referencesValidField(condition.field, fieldIds)
+            ? [condition]
+            : [];
+        }
+        case "group": {
+          return [
+            {
+              ...condition,
+              conditions: pruneRuleConditions(condition.conditions),
+            },
+          ];
+        }
+        case "review": {
+          return [condition];
         }
       }
-      if (field.type === "email" && !EMAIL_FORMAT.test(value)) {
-        return "Invalid email address";
-      }
-      break;
-    }
-    case "number":
-    case "rating":
-    case "slider": {
-      const { max, min } = field.attributes;
-      if (min !== undefined && Number(value) < min) {
-        return `Minimum value is ${min}`;
-      }
-      if (max !== undefined && Number(value) > max) {
-        return `Maximum value is ${max}`;
-      }
-      break;
-    }
-    default: {
-      break;
-    }
-  }
-  return null;
-}
+    });
 
-/**
- * Evaluates a single condition node. A group is complete only when it has at
- * least one child and every child is complete.
- */
-const isConditionComplete = (condition: Condition): boolean => {
-  switch (condition.type) {
-    case "comparison":
-    case "exists": {
-      return condition.field.trim().length > 0;
-    }
-    case "group": {
-      return (
-        condition.conditions.length > 0 &&
-        condition.conditions.every((child) => isConditionComplete(child))
-      );
-    }
-    case "review": {
-      return true;
-    }
-  }
+  const pruneRule = (rule: RuleDefinition): RuleDefinition =>
+    rule.condition.type === "group"
+      ? {
+          ...rule,
+          condition: {
+            ...rule.condition,
+            conditions: pruneRuleConditions(rule.condition.conditions),
+          },
+        }
+      : rule;
+
+  return {
+    ...definition,
+    rules: definition.rules.map((rule) => pruneRule(rule)),
+    steps: definition.steps.map((step) => ({
+      ...step,
+      sections: step.sections.map((section) => ({
+        ...section,
+        fields: section.fields.map((field) => ({
+          ...field,
+          logic: pruneLogic(field.logic),
+        })),
+      })),
+    })),
+  };
 };
 
 /**
- * A rule is complete when its WHEN tree is fully populated. Its outcome is
- * always assigned a status by the editor, so only the condition is checked.
+ * Source-of-truth gate used by the Publish action: every step, section, field
+ * and rule must be complete before a definition may be published. The editor
+ * panels show the same requirements as the zod schemas in ./schema; this is
+ * the final whole-definition check.
  */
-export const isRuleComplete = (rule: Rule): boolean =>
-  Boolean(rule.condition) && isConditionComplete(rule.condition);
-
-/**
- * A definition is "complete" when it is ready to be published: it contains at
- * least one field and every assessment rule's condition is fully populated.
- * Used by `Builder` to derive its `completed` state and `onComplete`.
- */
-export const isDefinitionComplete = (definition: FormDefinition): boolean => {
-  if (getAllFields(definition).length === 0) return false;
-  return definition.rules.every((rule) => isRuleComplete(rule));
-};
+export const validateDefinition = (definition: BuilderDefinition): boolean =>
+  getFields(definition.steps).length > 0 &&
+  buildDefinitionSchema(definition).safeParse(definition).success;

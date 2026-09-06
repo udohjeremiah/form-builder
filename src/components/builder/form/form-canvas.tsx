@@ -60,9 +60,6 @@ const SectionCard = ({
   selectedFieldId: null | string;
   startIndex: number;
 }) => {
-  // The section body is itself a drop target so fields can be dropped into
-  // empty areas of another section, not only onto existing fields. It only
-  // accepts palette items and fields; section drags target sibling cards.
   const { isDropTarget, ref } = useDroppable({
     accept: ["field", "palette"],
     id: entry.section.id,
@@ -135,7 +132,6 @@ const SectionCard = ({
           </span>
         )}
       </Button>
-
       <div
         className={cn(
           "space-y-1.5 border-t p-2.5 transition-colors",
@@ -145,7 +141,7 @@ const SectionCard = ({
         ref={ref}
       >
         {entry.section.fields.length === 0 ? (
-          <div className="flex h-16 items-center justify-center rounded-lg border border-dashed border-border/60 text-[11px] text-muted-foreground/35">
+          <div className="flex h-16 items-center justify-center rounded-lg border border-dashed text-xs text-muted-foreground">
             Drop fields here
           </div>
         ) : (
@@ -204,10 +200,9 @@ const SortableField = ({
       }}
       ref={ref}
     >
-      <div className="-ml-1 cursor-grab p-0.5 active:cursor-grabbing">
+      <div className="cursor-grab active:cursor-grabbing">
         <GripVerticalIcon className="size-3.5 text-muted-foreground/40 transition-colors group-hover:text-muted-foreground/60" />
       </div>
-
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <span className="truncate text-[13px] font-medium text-foreground">
@@ -224,7 +219,6 @@ const SortableField = ({
           ) && <EyeIcon className="size-3 shrink-0 text-muted-foreground" />}
         </div>
       </div>
-
       <div className="flex gap-1.5 rounded-sm opacity-40 transition-opacity group-hover:opacity-100">
         <Button
           onClick={(event) => {
@@ -265,7 +259,7 @@ const SortableStepTab = ({
   index: number;
   isActive: boolean;
   multiStepEnabled: boolean;
-  onRemoveStep: (index: number) => void;
+  onRemoveStep: (id: string) => void;
   onSelectStep: (id: string) => void;
   onStepChange: (index: number) => void;
   step: StepDefinition;
@@ -313,7 +307,7 @@ const SortableStepTab = ({
           className="-m-1 shrink-0 rounded-sm p-1 opacity-40 transition-opacity group-hover:opacity-100 hover:text-destructive active:bg-accent"
           onClick={(event) => {
             event.stopPropagation();
-            onRemoveStep(index);
+            onRemoveStep(step.id);
           }}
           role="button"
           title="Remove step"
@@ -330,6 +324,7 @@ export function FormCanvas({
   onAddSection,
   onAddStep,
   onDuplicate,
+  onPreview,
   onRemove,
   onRemoveSection,
   onRemoveStep,
@@ -346,9 +341,10 @@ export function FormCanvas({
   onAddSection: () => void;
   onAddStep: () => void;
   onDuplicate: (id: string) => void;
+  onPreview?: () => void;
   onRemove: (id: string) => void;
   onRemoveSection: (id: string) => void;
-  onRemoveStep: (index: number) => void;
+  onRemoveStep: (id: string) => void;
   onSelect: (id: string) => void;
   onSelectSection: (id: string) => void;
   onSelectStep: (id: string) => void;
@@ -358,8 +354,6 @@ export function FormCanvas({
   selectedSectionId: null | string;
   steps: StepDefinition[];
 }) {
-  // Multi-step is derived from the model; a lone step renders as one quiet
-  // tab chip that still selects the step for attribute editing.
   const multiStepEnabled = steps.length > 1;
   const isEmpty = steps.length === 0;
 
@@ -393,8 +387,6 @@ export function FormCanvas({
     0,
   );
 
-  // Sortable indexes must be unique across the whole droppable scope, so each
-  // field gets its position within the flattened list of rendered sections.
   const offsets: number[] = [];
   let running = 0;
   for (const entry of sections) {
@@ -402,7 +394,6 @@ export function FormCanvas({
     running += entry.section.fields.length;
   }
 
-  // A section can only be removed when its step keeps at least one section.
   const sectionCountsByStep = new Map<number, number>();
   for (const entry of sections) {
     sectionCountsByStep.set(
@@ -455,9 +446,21 @@ export function FormCanvas({
   return (
     <div className="flex size-full min-w-0 flex-col md:w-[60%]">
       <div className="flex items-center justify-between border-b border-border bg-background px-5 py-2.5">
-        <span className="text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
-          Canvas
-        </span>
+        <div className="flex items-center gap-1.5">
+          <span className="text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
+            Canvas
+          </span>
+          {onPreview && (
+            <Button
+              onClick={onPreview}
+              size="icon-xs"
+              title="Preview form"
+              variant="secondary"
+            >
+              <EyeIcon />
+            </Button>
+          )}
+        </div>
         <span className="font-mono text-[10px] text-muted-foreground">
           {summaryParts.join(" · ")}
         </span>

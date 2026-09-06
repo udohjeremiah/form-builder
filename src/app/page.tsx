@@ -2,17 +2,16 @@
 
 import { useEffect, useState } from "react";
 
-import { Builder, type FormDefinition } from "@/components/builder";
+import { Builder, type BuilderDefinition } from "@/components/builder";
 import { FormPreview } from "@/components/preview";
 
-const STORAGE_KEY = "form-definition";
+const STORAGE_KEY = "builder-definition";
+const EMPTY_DEFINITION: BuilderDefinition = { rules: [], steps: [] };
 
-const EMPTY_DEFINITION: FormDefinition = { rules: [], steps: [] };
-
-const loadSaved = (): FormDefinition => {
+const loadSaved = () => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as FormDefinition) : EMPTY_DEFINITION;
+    return raw ? (JSON.parse(raw) as BuilderDefinition) : EMPTY_DEFINITION;
   } catch {
     return EMPTY_DEFINITION;
   }
@@ -21,7 +20,7 @@ const loadSaved = (): FormDefinition => {
 export default function BuilderPage() {
   // `initialValue` is a one-time seed, so localStorage is read exactly once on
   // mount; the builder owns all state after that and reports it via onChange.
-  const [seed, setSeed] = useState<FormDefinition | null>(null);
+  const [seed, setSeed] = useState<BuilderDefinition | null>(null);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -42,17 +41,10 @@ export default function BuilderPage() {
       onComplete={(definition) => {
         console.log(definition);
       }}
-      preview={(definition) => <FormPreview definition={definition} />}
-    >
-      <Builder.Form>
-        <Builder.Form.Palette />
-        <Builder.Form.Canvas />
-        <Builder.Form.Properties />
-      </Builder.Form>
-      <Builder.Rules>
-        <Builder.Rules.List />
-        <Builder.Rules.Editor />
-      </Builder.Rules>
-    </Builder>
+      onSaveExit={(definition) => {
+        console.log(definition);
+      }}
+      preview={(steps) => <FormPreview steps={steps} />}
+    />
   );
 }

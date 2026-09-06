@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/empty";
 import { cn } from "@/lib/cn";
 
-import type { Rule, RuleStatus } from "../index";
+import type { RuleDefinition, RuleStatus } from "../index";
 
 import { RULE_STATUS_LABELS } from "./rule-definition";
 
@@ -31,7 +31,7 @@ export function RuleList({
 }: {
   onCreate: () => void;
   onEdit: (id: string) => void;
-  rules: Rule[];
+  rules: RuleDefinition[];
 }) {
   return (
     <div className="mx-auto flex size-full w-full max-w-5xl min-w-0 flex-col p-4 md:p-6">

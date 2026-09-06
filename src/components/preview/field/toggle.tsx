@@ -1,22 +1,16 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
+import type { FieldComponentProps } from "@/components/builder/form/form-definition";
+
 import { Switch } from "@/components/ui/switch";
 
-import type { FieldInputProps } from "../types";
-
-export function ToggleField({
-  disabled,
-  field,
-  onBlur,
-  onChange,
-  value,
-}: FieldInputProps) {
+export function ToggleField({ field }: FieldComponentProps) {
   return (
     <Switch
-      checked={value === "true"}
-      disabled={disabled}
-      id={field.id}
+      checked={field.state.value === "true"}
+      id={field.name}
       onCheckedChange={(checked) => {
-        onChange(String(checked));
-        onBlur();
+        field.handleChange(String(checked));
+        field.handleBlur();
       }}
     />
   );

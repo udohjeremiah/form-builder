@@ -5,17 +5,16 @@ import type { DragEndEvent } from "@dnd-kit/react";
 import { isSortable } from "@dnd-kit/react/sortable";
 import { useCallback, useState } from "react";
 
-import type { MobilePanel, Selection } from "../builder-context";
 import type {
   AnyFieldDefinition,
+  BuilderDefinition,
   FieldType,
   SectionAttributes,
   StepAttributes,
   StepDefinition,
 } from "../index";
-import type { StructureNode } from "./structure-properties";
+import type { StructureNode } from "./field-properties";
 
-import { useBuilder } from "../builder-context";
 import {
   addSection,
   addStep,
@@ -37,7 +36,7 @@ import {
   updateStepAttributes,
 } from "./form-definition";
 
-export interface FormEditor {
+export interface FormEditorState {
   activeStepIndex: number;
   handleAddSection: () => void;
   handleAddStep: () => void;
@@ -49,7 +48,7 @@ export interface FormEditor {
   ) => void;
   handleRemove: (id: string) => void;
   handleRemoveSection: (id: string) => void;
-  handleRemoveStep: (index: number) => void;
+  handleRemoveStep: (id: string) => void;
   handleStructureChange: (
     id: string,
     patch: SectionAttributes | StepAttributes,
@@ -72,8 +71,22 @@ export interface FormEditor {
   steps: StepDefinition[];
 }
 
-export function useFormEditor(): FormEditor {
-  const { formState, isMobile, setFormState } = useBuilder();
+export type MobilePanel = "canvas" | "output" | "palette" | "properties";
+
+type FormUpdater =
+  ((previous: BuilderDefinition) => BuilderDefinition) | BuilderDefinition;
+
+interface Selection {
+  id: string;
+  kind: "field" | "section" | "step";
+}
+
+export function useFormEditor(arguments_: {
+  formState: BuilderDefinition;
+  isMobile: boolean;
+  setFormState: (updater: FormUpdater) => void;
+}): FormEditorState {
+  const { formState, isMobile, setFormState } = arguments_;
 
   const steps = formState.steps;
   const multiStepEnabled = steps.length > 1;
@@ -102,6 +115,7 @@ export function useFormEditor(): FormEditor {
 
   const selectedNode: null | StructureNode = (() => {
     if (!selection || selection.kind === "field") return null;
+
     if (selection.kind === "step") {
       const index = steps.findIndex(
         (candidate) => candidate.id === selection.id,
@@ -117,10 +131,12 @@ export function useFormEditor(): FormEditor {
           }
         : null;
     }
+
     for (const step of steps) {
       const section = step.sections.find(
         (candidate) => candidate.id === selection.id,
       );
+
       if (section) {
         return {
           attributes: section.attributes,
@@ -129,6 +145,7 @@ export function useFormEditor(): FormEditor {
         };
       }
     }
+
     return null;
   })();
 
@@ -188,6 +205,7 @@ export function useFormEditor(): FormEditor {
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
       if (event.canceled) return;
+
       const { source, target } = event.operation;
       if (!source) return;
 
@@ -198,9 +216,12 @@ export function useFormEditor(): FormEditor {
       const droppedOnSection =
         targetId !== null && !isSortable(target) && sectionIds.has(targetId);
 
-      if (String(source.id).startsWith("palette-")) {
+      const sourceId = String(source.id);
+
+      if (sourceId.startsWith("palette-")) {
         const type = source.data["type"] as FieldType | undefined;
         if (!type) return;
+
         const field = newField(type);
         if (targetId !== null && droppedOnSection) {
           setFormState((previous) =>
@@ -215,22 +236,27 @@ export function useFormEditor(): FormEditor {
         return;
       }
 
-      const sourceId = String(source.id);
       if (sourceId.startsWith("step:")) {
         if (!isSortable(source) || !isSortable(target)) return;
+
         const { index, initialIndex } = source;
         if (initialIndex === index) return;
+
         handleMoveStep(initialIndex, index);
         return;
       }
+
       if (sourceId.startsWith("section:")) {
         if (!isSortable(source) || !isSortable(target)) return;
+
         const entry = renderedSections.find(
           (item) => `section:${item.section.id}` === sourceId,
         );
         if (!entry) return;
+
         const { index, initialIndex } = source;
         if (initialIndex === index) return;
+
         handleMoveSection(entry.stepIndex, initialIndex, index);
         return;
       }
@@ -243,6 +269,7 @@ export function useFormEditor(): FormEditor {
           `[data-section-fields="${CSS.escape(entry.section.id)}"]`,
         );
         if (!container) continue;
+
         for (const field of entry.section.fields) {
           const node = document.querySelector(
             `[data-field-id="${CSS.escape(field.id)}"]`,
@@ -255,6 +282,7 @@ export function useFormEditor(): FormEditor {
 
       let sourceSectionId: null | string = null;
       let sourceOffset = 0;
+
       for (const entry of renderedSections) {
         if (entry.section.fields.some((field) => field.id === fieldId)) {
           sourceSectionId = entry.section.id;
@@ -265,6 +293,7 @@ export function useFormEditor(): FormEditor {
 
       let targetSectionId: null | string =
         targetId !== null && droppedOnSection ? targetId : null;
+
       if (targetSectionId === null && targetId !== null) {
         for (const entry of renderedSections) {
           if (entry.section.fields.some((field) => field.id === targetId)) {
@@ -312,6 +341,7 @@ export function useFormEditor(): FormEditor {
   const handleRemove = useCallback(
     (id: string) => {
       setFormState((previous) => removeField(previous, id));
+
       if (selection?.kind === "field" && selection.id === id) {
         setSelection(null);
       }
@@ -321,10 +351,12 @@ export function useFormEditor(): FormEditor {
 
   const handleRemoveSection = useCallback(
     (id: string) => {
+      setFormState((previous) => removeSection(previous, id));
+
       const removed = renderedSections.find(
         (entry) => entry.section.id === id,
       )?.section;
-      setFormState((previous) => removeSection(previous, id));
+
       if (
         removed &&
         selection &&
@@ -359,8 +391,10 @@ export function useFormEditor(): FormEditor {
   const handleAddStep = useCallback(() => {
     const next = addStep(formState);
     setFormState(next);
+
     const created = next.steps.at(-1);
     if (!created) return;
+
     setActiveStepIndex(next.steps.length - 1);
     selectStep(created.id);
   }, [formState, selectStep, setFormState]);
@@ -368,17 +402,25 @@ export function useFormEditor(): FormEditor {
   const handleAddSection = useCallback(() => {
     const next = addSection(formState, activeStepIndex);
     setFormState(next);
+
     const created = next.steps[activeStepIndex]?.sections.at(-1);
     if (!created) return;
+
     selectSection(created.id);
   }, [activeStepIndex, formState, selectSection, setFormState]);
 
   const handleRemoveStep = useCallback(
-    (index: number) => {
+    (id: string) => {
       if (steps.length <= 1) return;
-      const removed = steps[index];
+
+      const index = steps.findIndex((step) => step.id === id);
+      if (index === -1) return;
+
       setFormState((previous) => removeStep(previous, index));
       setActiveStepIndex((previous) => Math.min(previous, steps.length - 2));
+
+      const removed = steps[index];
+
       if (
         removed &&
         selection &&
@@ -397,9 +439,10 @@ export function useFormEditor(): FormEditor {
   );
 
   const handleStructureChange = useCallback(
-    (_id: string, patch: SectionAttributes | StepAttributes) => {
+    (id: string, patch: SectionAttributes | StepAttributes) => {
       if (!selection || selection.kind === "field") return;
-      const { id, kind } = selection;
+
+      const kind = selection.kind;
       setFormState((previous) =>
         kind === "step"
           ? updateStepAttributes(previous, id, patch)

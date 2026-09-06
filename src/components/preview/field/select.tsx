@@ -1,4 +1,8 @@
-import { getActiveOptions } from "@/components/builder/form/form-definition";
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
+import {
+  type FieldComponentProps,
+  getActiveOptions,
+} from "@/components/builder/form/form-definition";
 import {
   Select,
   SelectContent,
@@ -8,77 +12,65 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/cn";
 
-import type { FieldInputPropsFor } from "../types";
+export function SelectField({ definition, field }: FieldComponentProps) {
+  const attributes = definition.attributes as {
+    multiple?: boolean;
+    placeholder?: string;
+  };
+  const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid;
+  const options = getActiveOptions(definition);
 
-export function SelectField({
-  disabled,
-  error,
-  field,
-  onBlur,
-  onChange,
-  touched,
-  value,
-}: FieldInputPropsFor<"select">) {
-  const hasError = touched && !!error;
-
-  if (field.attributes.multiple) {
+  if (attributes.multiple) {
     return (
       <select
+        aria-invalid={isInvalid ?? undefined}
         className={cn(
           "flex h-10 w-full items-center justify-between rounded-2xl border border-input bg-input/50 px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:ring-2 focus:ring-ring/30 focus:ring-offset-2 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50",
-          hasError ? "border-destructive/60 focus:ring-destructive/30" : "",
         )}
-        disabled={disabled}
+        id={field.name}
         multiple
-        onBlur={onBlur}
+        name={field.name}
+        onBlur={field.handleBlur}
         onChange={(event) => {
           const selected = Array.from(
             event.target.selectedOptions,
             (option) => option.value,
           );
-          onChange(selected.join(","));
+          field.handleChange(selected.join(","));
         }}
-        value={(value as string | undefined)?.split(",") ?? []}
+        value={field.state.value.split(",")}
       >
-        {getActiveOptions(field)
-          .filter(Boolean)
-          .map((o) => (
-            <option key={o} value={o}>
-              {o}
-            </option>
-          ))}
+        {options.filter(Boolean).map((o) => (
+          <option key={o} value={o}>
+            {o}
+          </option>
+        ))}
       </select>
     );
   }
 
   return (
     <Select
-      disabled={disabled}
       onValueChange={(v) => {
         if (!v) return;
-        onChange(v);
-        onBlur();
+        field.handleChange(v);
+        field.handleBlur();
       }}
-      value={value || undefined}
+      value={field.state.value}
     >
       <SelectTrigger
-        className={cn(
-          "w-full",
-          hasError ? "border-destructive/60 focus:ring-destructive/30" : "",
-        )}
+        aria-invalid={isInvalid ?? undefined}
+        className="w-full"
+        id={field.name}
       >
-        <SelectValue
-          placeholder={field.attributes.placeholder ?? "Select..."}
-        />
+        <SelectValue placeholder={attributes.placeholder ?? "Select..."} />
       </SelectTrigger>
       <SelectContent>
-        {getActiveOptions(field)
-          .filter(Boolean)
-          .map((o) => (
-            <SelectItem key={o} value={o}>
-              {o}
-            </SelectItem>
-          ))}
+        {options.filter(Boolean).map((o) => (
+          <SelectItem key={o} value={o}>
+            {o}
+          </SelectItem>
+        ))}
       </SelectContent>
     </Select>
   );

@@ -3,9 +3,9 @@
 import {
   ChevronsUpDown,
   ClipboardListIcon,
-  EyeIcon,
   ListChecksIcon,
   type LucideIcon,
+  SaveIcon,
 } from "lucide-react";
 import {
   type ReactNode,
@@ -23,24 +23,16 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 import {
-  BuilderContext,
-  type BuilderContextValue,
-  type BuilderView,
-  useForm,
-  useRules,
-} from "./builder-context";
-import { FieldPalette } from "./form/field-palette";
-import { FormCanvas } from "./form/form-canvas";
-import { getAllFields, isDefinitionComplete } from "./form/form-definition";
-import { Form } from "./form/form-editor";
-import { PreviewPanel, type PreviewRenderer } from "./preview-panel";
-import { RuleEditor } from "./rules/rule-editor";
-import { RuleList } from "./rules/rule-list";
-import { Rules } from "./rules/rules-editor";
+  getFields,
+  normalizeDefinition,
+  validateDefinition,
+} from "./form/form-definition";
+import { FormEditor } from "./form/form-editor";
+import { RulesEditor } from "./rules/rules-editor";
 
 export type AnyFieldDefinition = {
   [Type in FieldType]: FieldDefinition<Type>;
@@ -53,36 +45,48 @@ export interface BaseFieldAttributes {
   required?: boolean;
 }
 
+export interface BuilderDefinition {
+  rules: RuleDefinition[];
+  steps: StepDefinition[];
+}
+
 export interface BuilderProps {
-  /** The composed content: `<Builder.Form>` and/or `<Builder.Rules>`. */
-  children?: ReactNode;
-  /** Optional className applied to the outer shell. */
-  className?: string;
   /**
    * Seed used to initialize the builder's working state on first mount. The
    * builder is uncontrolled after that: its internal state is the source of
    * truth, edits are reported through `onChange`, and the consumer persists
    * wherever it likes. `initialValue` is only re-applied by remounting.
    */
-  initialValue?: FormDefinition;
+  initialValue?: BuilderDefinition;
   /** Notified whenever the definition changes. */
-  onChange?: (definition: FormDefinition) => void;
+  onChange?: (definition: BuilderDefinition) => void;
   /** Called when the builder is reset, with the fresh (reset) definition. */
-  onClear?: (definition: FormDefinition) => void;
+  onClear?: (definition: BuilderDefinition) => void;
   /**
    * Called with the completed definition and its completion flag either when
    * the `completed` state transitions or when the consumer triggers a
    * "complete" action on an already-complete definition. A definition is
-   * complete when it has at least one field and every rule's condition is
-   * populated.
+   * complete when it is ready to publish: it has at least one field, every
+   * step, section, and field attribute is valid, and every rule's area,
+   * outcome, and WHEN tree are populated.
    */
-  onComplete?: (definition: FormDefinition, completed: boolean) => void;
+  onComplete?: (definition: BuilderDefinition, completed: boolean) => void;
   /**
-   * Renders the live preview of the definition. When omitted, no preview is
-   * shown. Pass your own renderer to customize how the definition is previewed.
+   * Called with the current definition when the user triggers "Save & Exit".
+   * Use it to persist progress elsewhere (for example localStorage or a
+   * server) so work can be resumed later.
+   */
+  onSaveExit?: (definition: BuilderDefinition) => void;
+  /**
+   * Renders the live preview of the form steps. When omitted, no preview is
+   * shown. Pass your own renderer to customize how the form is previewed.
+   * The renderer receives only the step definitions (a form preview has no
+   * knowledge of rules); step navigation is the preview's own concern.
    */
   preview?: PreviewRenderer;
 }
+
+export type BuilderView = "form" | "rules";
 
 export interface ComparisonCondition {
   field: string;
@@ -221,11 +225,6 @@ export interface FileFieldAttributes extends BaseFieldAttributes {
   multiple?: boolean;
 }
 
-export interface FormDefinition {
-  rules: Rule[];
-  steps: StepDefinition[];
-}
-
 /**
  * Nests sibling conditions under a single combinator.
  */
@@ -270,7 +269,7 @@ export interface ReviewCondition {
  * The top-level assessment rule. `area` is a free-form grouping label;
  * `condition` (WHEN) drives the outcome (THEN).
  */
-export interface Rule {
+export interface RuleDefinition {
   area: string;
   condition: Condition;
   id: string;
@@ -312,6 +311,7 @@ export interface StepAttributes {
   description?: string;
   nextLabel?: string;
   previousLabel?: string;
+  submitLabel?: string;
   title?: string;
 }
 
@@ -353,239 +353,160 @@ const VIEW_LABELS: Record<BuilderView, { icon: LucideIcon; label: string }> = {
   rules: { icon: ListChecksIcon, label: "Rules Builder" },
 };
 
-const EMPTY_DEFINITION: FormDefinition = { rules: [], steps: [] };
+const EMPTY_DEFINITION: BuilderDefinition = { rules: [], steps: [] };
+export type PreviewRenderer = (steps: StepDefinition[]) => ReactNode;
+
 export function Builder({
-  children,
-  className,
   initialValue,
   onChange,
   onClear,
   onComplete,
+  onSaveExit,
   preview,
 }: BuilderProps) {
   const isMobile = useIsMobile();
-
-  // The builder owns its working state; `initialValue` only seeds the first
-  // mount. After that it's uncontrolled — edits flow out via `onChange` and
-  // the consumer persists independently.
-  const [formState, setFormState] = useState<FormDefinition>(
-    initialValue ?? EMPTY_DEFINITION,
+  const [formState, setFormStateRaw] = useState<BuilderDefinition>(
+    normalizeDefinition(initialValue ?? EMPTY_DEFINITION),
   );
+
+  const setFormState = useCallback<
+    (
+      updater:
+        | ((previous: BuilderDefinition) => BuilderDefinition)
+        | BuilderDefinition,
+    ) => void
+  >((updater) => {
+    setFormStateRaw((previous) =>
+      normalizeDefinition(
+        typeof updater === "function" ? updater(previous) : updater,
+      ),
+    );
+  }, []);
 
   const [view, setView] = useState<BuilderView>("form");
   const [resetKey, setResetKey] = useState(0);
+  const [showPreview, setShowPreview] = useState(false);
 
   useEffect(() => {
     onChange?.(formState);
   }, [formState, onChange]);
 
-  const completed = isDefinitionComplete(formState);
+  const completed = validateDefinition(formState);
   const completedRef = useRef(completed);
+
   useEffect(() => {
     if (completedRef.current === completed) return;
     completedRef.current = completed;
     onComplete?.(formState, completed);
   }, [completed, formState, onComplete]);
 
-  const allFields = getAllFields(formState);
+  const allFields = getFields(formState.steps);
 
   const handleClear = useCallback(() => {
     const next = EMPTY_DEFINITION;
     setFormState(next);
     onClear?.(next);
     setResetKey((previous) => previous + 1);
-  }, [onClear]);
-
-  const builderContext: BuilderContextValue = {
-    allFields,
-    formState,
-    isMobile,
-    preview,
-    setFormState,
-    view,
-  };
+  }, [onClear, setFormState]);
 
   return (
-    <BuilderContext.Provider value={builderContext}>
-      <div className={className ?? "flex h-screen flex-col bg-background"}>
-        <header className="flex h-12 shrink-0 items-center justify-between border-b border-border bg-background px-2 md:px-3">
-          <div className="flex items-center gap-1.5 md:gap-2">
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={
-                  <Button variant="ghost">
-                    {VIEW_LABELS[view].label}
-                    <ChevronsUpDown className="size-3 shrink-0" />
-                  </Button>
-                }
-              />
-              <DropdownMenuContent className="min-w-56">
-                <DropdownMenuRadioGroup
-                  onValueChange={(next: BuilderView) => {
-                    setView(next);
-                  }}
-                  value={view}
-                >
-                  {(Object.keys(VIEW_LABELS) as BuilderView[]).map((key) => {
-                    const { icon: ItemIcon, label } = VIEW_LABELS[key];
-                    return (
-                      <DropdownMenuRadioItem key={key} value={key}>
-                        <div className="flex size-6 items-center justify-center rounded-md border">
-                          <ItemIcon className="size-3.5 shrink-0" />
-                        </div>
-                        {label}
-                      </DropdownMenuRadioItem>
-                    );
-                  })}
-                </DropdownMenuRadioGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+    <div className="flex h-screen flex-col">
+      <header className="flex h-12 shrink-0 items-center justify-between border-b bg-background px-2">
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button variant="ghost">
+                {VIEW_LABELS[view].label}
+                <ChevronsUpDown className="size-3" />
+              </Button>
+            }
+          />
+          <DropdownMenuContent className="min-w-56">
+            <DropdownMenuRadioGroup
+              onValueChange={(next: BuilderView) => {
+                setView(next);
+              }}
+              value={view}
+            >
+              {(Object.keys(VIEW_LABELS) as BuilderView[]).map((key) => {
+                const { icon: ItemIcon, label } = VIEW_LABELS[key];
 
-          <div className="flex items-center gap-1 md:gap-1.5">
+                return (
+                  <DropdownMenuRadioItem key={key} value={key}>
+                    <div className="flex size-6 items-center justify-center rounded-md border">
+                      <ItemIcon className="size-3.5" />
+                    </div>
+                    {label}
+                  </DropdownMenuRadioItem>
+                );
+              })}
+            </DropdownMenuRadioGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <div className="flex items-center gap-2">
+          {onClear && (
             <Button onClick={handleClear} size="xs" variant="destructive">
               Clear
             </Button>
-
+          )}
+          {onSaveExit && (
+            <Button
+              disabled={allFields.length === 0 && formState.rules.length === 0}
+              onClick={() => {
+                onSaveExit(formState);
+              }}
+              size="xs"
+              variant="outline"
+            >
+              <SaveIcon className="size-3.5" />
+              Save &amp; Exit
+            </Button>
+          )}
+          {onComplete && (
             <Button
               disabled={!completed}
               onClick={() => {
-                onComplete?.(formState, true);
+                onComplete(formState, true);
               }}
               size="xs"
             >
               Publish
             </Button>
-
-            {!isMobile && (
-              <Sheet>
-                <SheetTrigger
-                  render={
-                    <Button size="xs" variant="outline">
-                      <EyeIcon className="size-3.5" />
-                      Preview
-                    </Button>
-                  }
-                />
-                <SheetContent className="min-w-full" side="right">
-                  <PreviewPanel
-                    definition={formState}
-                    renderPreview={preview}
-                  />
-                </SheetContent>
-              </Sheet>
-            )}
-          </div>
-        </header>
-
-        <main className="flex min-h-0 flex-1">
-          {view === "rules" ? (
-            <Builder.Rules>{children}</Builder.Rules>
-          ) : (
-            <Builder.Form key={resetKey}>{children}</Builder.Form>
           )}
-        </main>
-      </div>
-    </BuilderContext.Provider>
+        </div>
+      </header>
+      <main className="flex min-h-0 flex-1">
+        {view === "rules" ? (
+          <RulesEditor
+            allFields={allFields}
+            formState={formState}
+            setFormState={setFormState}
+          />
+        ) : (
+          <FormEditor
+            allFields={allFields}
+            formState={formState}
+            isMobile={isMobile}
+            key={resetKey}
+            onPreview={
+              preview
+                ? () => {
+                    setShowPreview(true);
+                  }
+                : undefined
+            }
+            preview={preview}
+            setFormState={setFormState}
+          />
+        )}
+      </main>
+      {preview && (
+        <Sheet onOpenChange={setShowPreview} open={showPreview}>
+          <SheetContent className="min-w-full overflow-y-auto" side="right">
+            {preview(formState.steps)}
+          </SheetContent>
+        </Sheet>
+      )}
+    </div>
   );
 }
-
-function PalettePart() {
-  const { handleTapAdd, isMobile } = useForm();
-  return <FieldPalette fullWidth={isMobile} onTapAdd={handleTapAdd} />;
-}
-
-PalettePart.role = "palette";
-
-function CanvasPart() {
-  const {
-    activeStepIndex,
-    handleAddSection,
-    handleAddStep,
-    handleDuplicate,
-    handleRemove,
-    handleRemoveSection,
-    handleRemoveStep,
-    renderedSections,
-    selectedId,
-    selectedSectionId,
-    selectField,
-    selectSection,
-    selectStep,
-    setActiveStepIndex,
-    steps,
-  } = useForm();
-
-  return (
-    <FormCanvas
-      activeStepIndex={activeStepIndex}
-      onAddSection={handleAddSection}
-      onAddStep={handleAddStep}
-      onDuplicate={handleDuplicate}
-      onRemove={handleRemove}
-      onRemoveSection={handleRemoveSection}
-      onRemoveStep={handleRemoveStep}
-      onSelect={selectField}
-      onSelectSection={selectSection}
-      onSelectStep={selectStep}
-      onStepChange={setActiveStepIndex}
-      sections={renderedSections}
-      selectedId={selectedId}
-      selectedSectionId={selectedSectionId}
-      steps={steps}
-    />
-  );
-}
-
-CanvasPart.role = "canvas";
-
-function PropertiesPart() {
-  const { isMobile, renderProperties } = useForm();
-  return renderProperties(isMobile ? true : undefined);
-}
-
-PropertiesPart.role = "properties";
-
-function RulesListPart() {
-  const { handleCreate, openEditor, rules } = useRules();
-  return <RuleList onCreate={handleCreate} onEdit={openEditor} rules={rules} />;
-}
-
-RulesListPart.role = "list";
-
-function RulesEditorPart() {
-  const { allFields, editingRule, handleChange, handleDelete, onBack } =
-    useRules();
-
-  if (!editingRule) return null;
-
-  return (
-    <RuleEditor
-      allFields={allFields}
-      onBack={onBack}
-      onChange={handleChange}
-      onDelete={() => {
-        handleDelete(editingRule.id);
-      }}
-      rule={editingRule}
-    />
-  );
-}
-
-RulesEditorPart.role = "editor";
-
-const FormNamespace = Object.assign(Form, {
-  Canvas: CanvasPart,
-  Palette: PalettePart,
-  Properties: PropertiesPart,
-});
-
-const RulesNamespace = Object.assign(Rules, {
-  Editor: RulesEditorPart,
-  List: RulesListPart,
-});
-
-Builder.Form = FormNamespace;
-Builder.Rules = RulesNamespace;
-
-export type { PreviewRenderer } from "./preview-panel";
